@@ -1,7 +1,7 @@
 [project]
 name = "idios"
-version = "0.1.0"
-description = "Add your description here."
+version = "0.1.1"
+description = "A terminal code editor for those of us who aren't into vim."
 readme = "README.md"
 authors = [
     { name = "Daniel Roy Greenfeld", email = "daniel@feldroy.com" }
