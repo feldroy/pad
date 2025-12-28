@@ -251,15 +251,17 @@ class IdiosApp(App):
         Binding("ctrl+b", "toggle_browser", "Browse Files"),
         Binding("ctrl+p", "search_files", "Search Files"),
         Binding("ctrl+s", "save_file", "Save"),
+        Binding("ctrl+shift+a", "toggle_autosave", "Toggle Autosave"),
         Binding("ctrl+q", "quit", "Quit"),
     ]
 
-    def __init__(self) -> None:
+    def __init__(self, current_file: Path) -> None:
         super().__init__()
-        self.current_file: Path | None = None
-        self.root_path = Path.cwd()
+        self.current_file = current_file
+        self.root_path = current_file.cwd()
         self.editor: Editor | None = None
         self.file_modified = False
+        self.autosave = True
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -268,8 +270,27 @@ class IdiosApp(App):
                 yield EditorPane(id="editor-pane")
         yield Footer()
 
+    async def on_mount(self) -> None:
+        """Open README.md by default if it exists."""
+        readme_path = self.root_path / "README.md"
+        if readme_path.exists():
+            await self.open_file(readme_path)
+
+    def _save_current_file(self) -> None:
+        """Save the current file if modified."""
+        if self.current_file and self.editor and self.file_modified:
+            try:
+                self.current_file.write_text(self.editor.text)
+                self.file_modified = False
+            except Exception as e:
+                self.notify(f"Error saving file: {e}", severity="error")
+
     async def open_file(self, path: Path) -> None:
         """Open a file in the editor."""
+        # Autosave current file before switching
+        if self.autosave:
+            self._save_current_file()
+
         try:
             content = path.read_text()
         except Exception as e:
@@ -371,6 +392,12 @@ class IdiosApp(App):
         except Exception as e:
             self.notify(f"Error saving file: {e}", severity="error")
 
+    def action_toggle_autosave(self) -> None:
+        """Toggle autosave on/off."""
+        self.autosave = not self.autosave
+        status = "ON" if self.autosave else "OFF"
+        self.notify(f"Autosave: {status}")
+
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
         """Track when the file has been modified."""
         if self.current_file and not self.file_modified:
@@ -379,7 +406,7 @@ class IdiosApp(App):
             title.update(f" {self.current_file.name} [modified]")
 
 
-def run() -> None:
+def run(path: Path) -> None:
     """Run the Idios application."""
-    app = IdiosApp()
+    app = IdiosApp(path)
     app.run()

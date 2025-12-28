@@ -1,6 +1,17 @@
+from pathlib import Path
+
+import typer
+
 from idios.app import run
 
+app = typer.Typer(
+    name="idios",
+    help="A command-line code editor.",
+    add_completion=False,
+)
 
-def main() -> None:
-    """Entry point for the Idios code editor."""
-    run()
+
+@app.callback(invoke_without_command=True)
+def main(path: Path) -> None:
+    """Launch the Idios code editor."""
+    run(path)

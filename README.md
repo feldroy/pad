@@ -7,3 +7,6 @@ Idios (ἴδιος) is an Ancient Greek word that means:
 - distinct / peculiar to an individual
 - private, not involved in public affairs, which eventually turned into the word "idiot"
 
+## Usage
+
+TODO!
