@@ -511,6 +511,8 @@ class IdiosApp(App):
         Binding("ctrl+s", "save_file", "Save"),
         Binding("ctrl+shift+a", "toggle_autosave", "Toggle Autosave"),
         Binding("ctrl+q", "confirm_quit", "Quit"),
+        Binding("alt+down", "page_down", "Page Down", show=False),
+        Binding("alt+up", "page_up", "Page Up", show=False),
     ]
 
     def __init__(self, path: Path) -> None:
@@ -716,6 +718,39 @@ class IdiosApp(App):
                 self.editor.focus()
 
         self.push_screen(QuitConfirmModal(), handle_result)
+
+    def action_page_down(self) -> None:
+        """Move cursor down by one page."""
+        if self.editor is None:
+            return
+
+        current_row, current_col = self.editor.cursor_location
+        viewport_height = self.editor.size.height
+        line_count = self.editor.text.count("\n") + 1
+
+        # Move down by viewport height, but don't go past the last line
+        new_row = min(current_row + viewport_height, line_count - 1)
+        self.editor.cursor_location = (new_row, current_col)
+
+        # Scroll to keep cursor centered
+        scroll_y = max(0, new_row - viewport_height // 2)
+        self.editor.scroll_to(0, scroll_y, animate=False)
+
+    def action_page_up(self) -> None:
+        """Move cursor up by one page."""
+        if self.editor is None:
+            return
+
+        current_row, current_col = self.editor.cursor_location
+        viewport_height = self.editor.size.height
+
+        # Move up by viewport height, but don't go past the first line
+        new_row = max(current_row - viewport_height, 0)
+        self.editor.cursor_location = (new_row, current_col)
+
+        # Scroll to keep cursor centered
+        scroll_y = max(0, new_row - viewport_height // 2)
+        self.editor.scroll_to(0, scroll_y, animate=False)
 
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
         """Track when the file has been modified."""
