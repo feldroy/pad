@@ -136,6 +136,62 @@ class FileSearchModal(ModalScreen[Path | None]):
         self.dismiss(None)
 
 
+class GoToLineModal(ModalScreen[int | None]):
+    """Modal for jumping to a specific line number."""
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+    ]
+
+    CSS = """
+    GoToLineModal {
+        align: center middle;
+    }
+
+    #goto-container {
+        width: 50%;
+        max-width: 60;
+        height: auto;
+        background: $surface;
+        border: tall $primary;
+        padding: 1 2;
+    }
+
+    #goto-label {
+        margin-bottom: 1;
+    }
+
+    #goto-input {
+        width: 100%;
+    }
+    """
+
+    def __init__(self, max_line: int) -> None:
+        super().__init__()
+        self.max_line = max_line
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="goto-container"):
+            yield Label(f"Type a line number between 1 and {self.max_line}", id="goto-label")
+            yield Input(placeholder="Line number...", id="goto-input")
+
+    def on_mount(self) -> None:
+        self.query_one("#goto-input", Input).focus()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        try:
+            line_num = int(event.value)
+            if 1 <= line_num <= self.max_line:
+                self.dismiss(line_num)
+            else:
+                self.notify(f"Line number must be between 1 and {self.max_line}", severity="warning")
+        except ValueError:
+            self.notify("Please enter a valid number", severity="warning")
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
 class FileBrowserModal(ModalScreen[Path | None]):
     """Modal for browsing and selecting files."""
 
@@ -197,6 +253,7 @@ class Editor(TextArea):
             language=language,
             theme="monokai",
             tab_behavior="indent",
+            show_line_numbers=True,
             **kwargs,
         )
 
@@ -250,6 +307,7 @@ class IdiosApp(App):
     BINDINGS = [
         Binding("ctrl+b", "toggle_browser", "Browse Files"),
         Binding("ctrl+p", "search_files", "Search Files"),
+        Binding("ctrl+g", "goto_line", "Go to Line"),
         Binding("ctrl+s", "save_file", "Save"),
         Binding("ctrl+shift+a", "toggle_autosave", "Toggle Autosave"),
         Binding("ctrl+q", "quit", "Quit"),
@@ -383,6 +441,30 @@ class IdiosApp(App):
                 await self.open_file(path)
 
         self.push_screen(FileSearchModal(self.root_path), handle_result)
+
+    def action_goto_line(self) -> None:
+        """Open the go to line modal."""
+        if self.editor is None:
+            self.notify("No file open", severity="warning")
+            return
+
+        # Count lines in the current file
+        line_count = self.editor.text.count("\n") + 1
+
+        def handle_result(line_num: int | None) -> None:
+            if line_num is not None and self.editor:
+                # TextArea uses 0-indexed rows
+                target_row = line_num - 1
+                self.editor.cursor_location = (target_row, 0)
+
+                # Center the line in the viewport
+                viewport_height = self.editor.size.height
+                scroll_y = max(0, target_row - viewport_height // 2)
+                self.editor.scroll_to(0, scroll_y, animate=False)
+
+                self.editor.focus()
+
+        self.push_screen(GoToLineModal(line_count), handle_result)
 
     def action_save_file(self) -> None:
         """Save the current file."""
