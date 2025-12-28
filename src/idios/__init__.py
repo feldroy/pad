@@ -12,6 +12,6 @@ app = typer.Typer(
 
 
 @app.callback(invoke_without_command=True)
-def main(path: Path) -> None:
+def main(path: Path = typer.Argument(default=Path("."))) -> None:
     """Launch the Idios code editor."""
-    run(path)
+    run(path.resolve())

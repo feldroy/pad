@@ -227,7 +227,7 @@ class EditorPane(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Static("No file open", id="editor-title")
-        yield Static("Press Ctrl+P to search for a file\nor select a file from the browser", id="no-file")
+        yield Static("Press Ctrl+b to search for a file", id="no-file")
 
 
 class IdiosApp(App):
@@ -255,10 +255,16 @@ class IdiosApp(App):
         Binding("ctrl+q", "quit", "Quit"),
     ]
 
-    def __init__(self, current_file: Path) -> None:
+    def __init__(self, path: Path) -> None:
         super().__init__()
-        self.current_file = current_file
-        self.root_path = current_file.cwd()
+        # Determine if path is a file or directory
+        if path.is_file():
+            self.initial_file: Path | None = path
+            self.root_path = path.parent
+        else:
+            self.initial_file = None
+            self.root_path = path
+        self.current_file: Path | None = None
         self.editor: Editor | None = None
         self.file_modified = False
         self.autosave = True
@@ -271,10 +277,13 @@ class IdiosApp(App):
         yield Footer()
 
     async def on_mount(self) -> None:
-        """Open README.md by default if it exists."""
-        readme_path = self.root_path / "README.md"
-        if readme_path.exists():
-            await self.open_file(readme_path)
+        """Open the initial file if one was provided, or README.md if a directory was given."""
+        if self.initial_file:
+            await self.open_file(self.initial_file)
+        else:
+            readme_path = self.root_path / "README.md"
+            if readme_path.exists():
+                await self.open_file(readme_path)
 
     def _save_current_file(self) -> None:
         """Save the current file if modified."""
