@@ -31,7 +31,13 @@ Currently idios is untested with any other installation method. If it works for 
 
 ## Usage
 
-Once installed, point it at the file you want to view.
+Once installed, point it at a file: 
+
+```sh
+idios myproject/README.md
+```
+
+Or a directory:
 
 ```sh
 idios myproject/
