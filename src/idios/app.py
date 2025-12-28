@@ -1,6 +1,7 @@
 """Idios - A command-line code editor built with Textual."""
 
 from pathlib import Path
+from typing import Iterable
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -88,8 +89,12 @@ class FileSearchModal(ModalScreen[Path | None]):
 
         # Search for files matching the query
         self.results = []
+        excluded_dirs = {".venv", ".git", "__pycache__"}
         try:
             for path in self.root_path.rglob("*"):
+                # Skip files in excluded directories
+                if any(part in excluded_dirs for part in path.parts):
+                    continue
                 if path.is_file() and query in path.name.lower():
                     self.results.append(path)
                     if len(self.results) >= 20:
@@ -375,16 +380,54 @@ class FileBrowserModal(ModalScreen[Path | None]):
     }
     """
 
-    def __init__(self, root_path: Path) -> None:
+    def __init__(self, root_path: Path, current_file: Path | None = None) -> None:
         super().__init__()
         self.root_path = root_path
+        self.current_file = current_file
 
     def compose(self) -> ComposeResult:
         with Vertical(id="browser-container"):
             yield DirectoryTree(self.root_path, id="browser-tree")
 
-    def on_mount(self) -> None:
-        self.query_one("#browser-tree", DirectoryTree).focus()
+    async def on_mount(self) -> None:
+        import asyncio
+
+        tree = self.query_one("#browser-tree", DirectoryTree)
+        tree.focus()
+
+        # If we have a current file, expand to it
+        if self.current_file and self.current_file.exists():
+            try:
+                relative = self.current_file.relative_to(self.root_path)
+                parts = relative.parts
+
+                # Expand each directory in the path
+                current_path = self.root_path
+                for part in parts[:-1]:  # All but the last part (the file)
+                    current_path = current_path / part
+                    node = self._find_node_for_path(tree, current_path)
+                    if node:
+                        node.expand()
+                        await asyncio.sleep(0.05)  # Wait for children to load
+
+                # Find the file node and move cursor to it
+                file_node = self._find_node_for_path(tree, self.current_file)
+                if file_node and file_node.line >= 0:
+                    tree.cursor_line = file_node.line
+            except (ValueError, Exception):
+                pass  # File is not under root_path or other error
+
+    def _find_node_for_path(self, tree: DirectoryTree, target_path: Path):
+        """Find the tree node for a given path."""
+        def search(node):
+            if hasattr(node, "data") and node.data and node.data.path == target_path:
+                return node
+            for child in node.children:
+                result = search(child)
+                if result:
+                    return result
+            return None
+        return search(tree.root)
 
     def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
         self.dismiss(event.path)
@@ -589,7 +632,7 @@ class IdiosApp(App):
             elif self.editor:
                 self.editor.focus()
 
-        self.push_screen(FileBrowserModal(self.root_path), handle_result)
+        self.push_screen(FileBrowserModal(self.root_path, self.current_file), handle_result)
 
     def action_search_files(self) -> None:
         """Open the file search modal."""
