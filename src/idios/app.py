@@ -229,10 +229,10 @@ class IdiosApp(App):
                 yield EditorPane(id="editor-pane")
         yield Footer()
 
-    def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
-        self.open_file(event.path)
+    async def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
+        await self.open_file(event.path)
 
-    def open_file(self, path: Path) -> None:
+    async def open_file(self, path: Path) -> None:
         """Open a file in the editor."""
         try:
             content = path.read_text()
@@ -256,16 +256,16 @@ class IdiosApp(App):
         # Remove the "no file" placeholder if it exists
         no_file = editor_pane.query("#no-file")
         if no_file:
-            no_file.first().remove()
+            await no_file.first().remove()
 
         # Check if editor already exists
         existing_editor = editor_pane.query("#editor")
         if existing_editor:
             # Remove old editor and create new one with correct language
-            existing_editor.first().remove()
+            await existing_editor.first().remove()
 
         self.editor = Editor(content, language=language, id="editor")
-        editor_pane.mount(self.editor)
+        await editor_pane.mount(self.editor)
         self.editor.focus()
 
     def _get_language(self, path: Path) -> str | None:
@@ -305,11 +305,16 @@ class IdiosApp(App):
         browser = self.query_one("#file-browser", FileBrowser)
         browser.display = not browser.display
 
+        if browser.display:
+            browser.focus()
+        elif self.editor:
+            self.editor.focus()
+
     def action_search_files(self) -> None:
         """Open the file search modal."""
-        def handle_result(path: Path | None) -> None:
+        async def handle_result(path: Path | None) -> None:
             if path:
-                self.open_file(path)
+                await self.open_file(path)
 
         self.push_screen(FileSearchModal(self.root_path), handle_result)
 
