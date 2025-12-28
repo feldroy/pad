@@ -136,6 +136,99 @@ class FileSearchModal(ModalScreen[Path | None]):
         self.dismiss(None)
 
 
+class TextSearchModal(ModalScreen[None]):
+    """Modal for searching text within the file."""
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+    ]
+
+    CSS = """
+    TextSearchModal {
+        align: center middle;
+    }
+
+    #text-search-container {
+        width: 60%;
+        max-width: 80;
+        height: auto;
+        background: $surface;
+        border: tall $primary;
+        padding: 1 2;
+    }
+
+    #text-search-input {
+        width: 100%;
+        margin-bottom: 1;
+    }
+
+    #match-count {
+        height: 1;
+        color: $text-muted;
+    }
+    """
+
+    def __init__(self, text: str, navigate_callback) -> None:
+        super().__init__()
+        self.text = text
+        self.navigate_callback = navigate_callback
+        self.matches: list[tuple[int, int]] = []  # List of (row, col) positions
+        self.current_match_index = 0
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="text-search-container"):
+            yield Input(placeholder="Search...", id="text-search-input")
+            yield Label("", id="match-count")
+
+    def on_mount(self) -> None:
+        self.query_one("#text-search-input", Input).focus()
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        query = event.value
+        match_label = self.query_one("#match-count", Label)
+
+        if not query:
+            self.matches = []
+            self.current_match_index = 0
+            match_label.update("")
+            return
+
+        # Find all matches
+        self.matches = []
+        lines = self.text.split("\n")
+        for row, line in enumerate(lines):
+            col = 0
+            while True:
+                pos = line.find(query, col)
+                if pos == -1:
+                    break
+                self.matches.append((row, pos))
+                col = pos + 1
+
+        self.current_match_index = 0
+        if self.matches:
+            match_label.update(f"1 of {len(self.matches)} matches")
+            # Navigate to first match
+            self.navigate_callback(self.matches[0])
+        else:
+            match_label.update("No matches")
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if not self.matches:
+            return
+
+        # Move to next match
+        self.current_match_index = (self.current_match_index + 1) % len(self.matches)
+        match_label = self.query_one("#match-count", Label)
+        match_label.update(f"{self.current_match_index + 1} of {len(self.matches)} matches")
+
+        # Navigate to the match
+        self.navigate_callback(self.matches[self.current_match_index])
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
 class GoToLineModal(ModalScreen[int | None]):
     """Modal for jumping to a specific line number."""
 
@@ -190,6 +283,69 @@ class GoToLineModal(ModalScreen[int | None]):
 
     def action_cancel(self) -> None:
         self.dismiss(None)
+
+
+class QuitConfirmModal(ModalScreen[bool]):
+    """Modal for confirming quit action."""
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+        Binding("ctrl+q", "confirm", "Quit"),
+    ]
+
+    CSS = """
+    QuitConfirmModal {
+        align: center middle;
+    }
+
+    #quit-container {
+        width: 40%;
+        max-width: 50;
+        height: auto;
+        background: $surface;
+        border: tall $primary;
+        padding: 1 2;
+    }
+
+    #quit-label {
+        text-align: center;
+        margin-bottom: 1;
+    }
+
+    #quit-buttons {
+        align: center middle;
+        height: auto;
+    }
+
+    .quit-button {
+        margin: 0 1;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        from textual.widgets import Button
+
+        with Vertical(id="quit-container"):
+            yield Label("Are you sure you want to quit?", id="quit-label")
+            with Horizontal(id="quit-buttons"):
+                yield Button("Yes", id="quit-yes", classes="quit-button", variant="error")
+                yield Button("No", id="quit-no", classes="quit-button")
+            yield Label("You can use ctrl+q again to quit.", id="quit-label-ctrl-q-again")
+
+    def on_mount(self) -> None:
+        self.query_one("#quit-no").focus()
+
+    def on_button_pressed(self, event) -> None:
+        if event.button.id == "quit-yes":
+            self.dismiss(True)
+        else:
+            self.dismiss(False)
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
+
+    def action_confirm(self) -> None:
+        self.dismiss(True)
 
 
 class FileBrowserModal(ModalScreen[Path | None]):
@@ -306,11 +462,12 @@ class IdiosApp(App):
 
     BINDINGS = [
         Binding("ctrl+b", "toggle_browser", "Browse Files"),
-        Binding("ctrl+p", "search_files", "Search Files"),
+        Binding("ctrl+o", "search_files", "Search Files"),
+        Binding("ctrl+h", "search_text", "Find"),
         Binding("ctrl+g", "goto_line", "Go to Line"),
         Binding("ctrl+s", "save_file", "Save"),
         Binding("ctrl+shift+a", "toggle_autosave", "Toggle Autosave"),
-        Binding("ctrl+q", "quit", "Quit"),
+        Binding("ctrl+q", "confirm_quit", "Quit"),
     ]
 
     def __init__(self, path: Path) -> None:
@@ -442,6 +599,24 @@ class IdiosApp(App):
 
         self.push_screen(FileSearchModal(self.root_path), handle_result)
 
+    def action_search_text(self) -> None:
+        """Open the text search modal."""
+        if self.editor is None:
+            self.notify("No file open", severity="warning")
+            return
+
+        def navigate_to_match(position: tuple[int, int]) -> None:
+            if self.editor:
+                row, col = position
+                self.editor.cursor_location = (row, col)
+
+                # Center the line in the viewport
+                viewport_height = self.editor.size.height
+                scroll_y = max(0, row - viewport_height // 2)
+                self.editor.scroll_to(0, scroll_y, animate=False)
+
+        self.push_screen(TextSearchModal(self.editor.text, navigate_to_match))
+
     def action_goto_line(self) -> None:
         """Open the go to line modal."""
         if self.editor is None:
@@ -488,6 +663,16 @@ class IdiosApp(App):
         self.autosave = not self.autosave
         status = "ON" if self.autosave else "OFF"
         self.notify(f"Autosave: {status}")
+
+    def action_confirm_quit(self) -> None:
+        """Show quit confirmation dialog."""
+        def handle_result(confirmed: bool) -> None:
+            if confirmed:
+                self.exit()
+            elif self.editor:
+                self.editor.focus()
+
+        self.push_screen(QuitConfirmModal(), handle_result)
 
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
         """Track when the file has been modified."""
