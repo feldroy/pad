@@ -136,18 +136,49 @@ class FileSearchModal(ModalScreen[Path | None]):
         self.dismiss(None)
 
 
-class FileBrowser(DirectoryTree):
-    """File browser widget."""
+class FileBrowserModal(ModalScreen[Path | None]):
+    """Modal for browsing and selecting files."""
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+        Binding("ctrl+b", "cancel", "Close"),
+    ]
 
     CSS = """
-    FileBrowser {
-        width: 30;
-        min-width: 20;
-        dock: left;
+    FileBrowserModal {
+        align: center middle;
+    }
+
+    #browser-container {
+        width: 60%;
+        height: 80%;
         background: $surface;
-        border-right: solid $primary;
+        border: tall $primary;
+        padding: 1;
+    }
+
+    #browser-tree {
+        width: 100%;
+        height: 100%;
     }
     """
+
+    def __init__(self, root_path: Path) -> None:
+        super().__init__()
+        self.root_path = root_path
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="browser-container"):
+            yield DirectoryTree(self.root_path, id="browser-tree")
+
+    def on_mount(self) -> None:
+        self.query_one("#browser-tree", DirectoryTree).focus()
+
+    def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
+        self.dismiss(event.path)
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
 
 
 class Editor(TextArea):
@@ -159,6 +190,15 @@ class Editor(TextArea):
         height: 100%;
     }
     """
+
+    def __init__(self, text: str = "", *, language: str | None = None, **kwargs) -> None:
+        super().__init__(
+            text,
+            language=language,
+            theme="monokai",
+            tab_behavior="indent",
+            **kwargs,
+        )
 
 
 class EditorPane(Vertical):
@@ -208,7 +248,7 @@ class IdiosApp(App):
     """
 
     BINDINGS = [
-        Binding("ctrl+b", "toggle_browser", "Toggle Browser"),
+        Binding("ctrl+b", "toggle_browser", "Browse Files"),
         Binding("ctrl+p", "search_files", "Search Files"),
         Binding("ctrl+s", "save_file", "Save"),
         Binding("ctrl+q", "quit", "Quit"),
@@ -224,13 +264,9 @@ class IdiosApp(App):
     def compose(self) -> ComposeResult:
         yield Header()
         with Horizontal(id="main-container"):
-            yield FileBrowser(self.root_path, id="file-browser")
             with Container(id="editor-container"):
                 yield EditorPane(id="editor-pane")
         yield Footer()
-
-    async def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
-        await self.open_file(event.path)
 
     async def open_file(self, path: Path) -> None:
         """Open a file in the editor."""
@@ -301,14 +337,14 @@ class IdiosApp(App):
         return extension_map.get(path.suffix.lower())
 
     def action_toggle_browser(self) -> None:
-        """Toggle the file browser visibility."""
-        browser = self.query_one("#file-browser", FileBrowser)
-        browser.display = not browser.display
+        """Open the file browser modal."""
+        async def handle_result(path: Path | None) -> None:
+            if path:
+                await self.open_file(path)
+            elif self.editor:
+                self.editor.focus()
 
-        if browser.display:
-            browser.focus()
-        elif self.editor:
-            self.editor.focus()
+        self.push_screen(FileBrowserModal(self.root_path), handle_result)
 
     def action_search_files(self) -> None:
         """Open the file search modal."""

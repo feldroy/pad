@@ -13,3 +13,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Idios is a Python CLI application using `uv` as the build system and package manager. Requires Python 3.14+.
 
 Entry point: `src/idios/__init__.py:main()`
+
+## Running the app
+
+```sh
+idios
+```

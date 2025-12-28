@@ -1,14 +1,14 @@
 [project]
 name = "idios"
 version = "0.1.0"
-description = "Add your description here"
+description = "Add your description here."
 readme = "README.md"
 authors = [
     { name = "Daniel Roy Greenfeld", email = "daniel@feldroy.com" }
 ]
 requires-python = ">=3.14"
 dependencies = [
-    "textual>=3.0.0",
+    "textual[syntax]>=3.0.0",
 ]
 
 [project.scripts]
