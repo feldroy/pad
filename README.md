@@ -9,7 +9,7 @@ Idios (ἴδιος) is an Ancient Greek word that means:
 
 It's also a terminal code editor for those of us who aren't into vim.
 
-## Features
+## Features
 
 - Powered by Textual TUI
 - Runs in the shell
@@ -27,7 +27,7 @@ It's also a terminal code editor for those of us who aren't into vim.
 uv tool idios
 ```
 
-Currently idios is untested with any other installation method. If it works for your installation method, let me know and I'll update this page.
+Currently idios is untested with any other installation method. If it works for your installation method, let me know and I'll add it to this section.
 
 ## Usage
 
