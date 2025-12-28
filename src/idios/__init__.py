@@ -1,2 +1,6 @@
+from idios.app import run
+
+
 def main() -> None:
-    print("Hello from idios!")
+    """Entry point for the Idios code editor."""
+    run()
