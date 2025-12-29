@@ -19,6 +19,7 @@ It's also a terminal code editor for those of us who aren't into vim.
 - Text editor with code highlighting for the current open file
 - Copy (cmd-c) and paste (cmd-v) uses standard IDE keys
 - If not pointed at a file, opens the current directory, default open file is any README.md that may exist
+- Watches the current file and lets you know if there have been changes
 - Responsive, resize the window and it still looks good
 
 ## Install

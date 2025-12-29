@@ -1,6 +1,6 @@
 [project]
 name = "idios"
-version = "0.1.3"
+version = "0.2.0"
 description = "A terminal code editor for those of us who aren't into vim."
 readme = "README.md"
 authors = [
