@@ -1,6 +1,8 @@
 """Idios - A command-line code editor built with Textual."""
 
+import fnmatch
 from pathlib import Path
+from typing import Iterable
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -15,6 +17,113 @@ from textual.widgets import (
     Static,
     TextArea,
 )
+
+
+class GitignoreFilter:
+    """Parses and applies .gitignore patterns."""
+
+    def __init__(self, root_path: Path) -> None:
+        self.root_path = root_path
+        self.patterns: list[tuple[str, bool]] = []  # (pattern, is_negation)
+        self._load_gitignore()
+
+    def _load_gitignore(self) -> None:
+        """Load patterns from .gitignore file."""
+        gitignore_path = self.root_path / ".gitignore"
+        if not gitignore_path.exists():
+            return
+
+        try:
+            content = gitignore_path.read_text()
+            for line in content.splitlines():
+                line = line.strip()
+                # Skip empty lines and comments
+                if not line or line.startswith("#"):
+                    continue
+
+                # Check for negation
+                is_negation = line.startswith("!")
+                if is_negation:
+                    line = line[1:]
+
+                self.patterns.append((line, is_negation))
+        except Exception:
+            pass  # Ignore errors reading .gitignore
+
+    def is_ignored(self, path: Path) -> bool:
+        """Check if a path should be ignored based on .gitignore patterns."""
+        try:
+            relative = path.relative_to(self.root_path)
+        except ValueError:
+            return False
+
+        relative_str = str(relative)
+        name = path.name
+
+        ignored = False
+        for pattern, is_negation in self.patterns:
+            matched = False
+
+            # Handle directory-only patterns (ending with /)
+            if pattern.endswith("/"):
+                if path.is_dir():
+                    pattern = pattern[:-1]
+                else:
+                    continue
+
+            # Handle patterns with /
+            if "/" in pattern and not pattern.startswith("/"):
+                # Pattern with / matches from root
+                matched = fnmatch.fnmatch(relative_str, pattern) or fnmatch.fnmatch(
+                    relative_str, f"**/{pattern}"
+                )
+            elif pattern.startswith("/"):
+                # Anchored to root
+                matched = fnmatch.fnmatch(relative_str, pattern[1:])
+            else:
+                # Match against name only, or full path with **
+                matched = fnmatch.fnmatch(name, pattern) or fnmatch.fnmatch(
+                    relative_str, f"**/{pattern}"
+                )
+
+            if matched:
+                ignored = not is_negation
+
+        return ignored
+
+
+class FilteredDirectoryTree(DirectoryTree):
+    """DirectoryTree that respects .gitignore patterns."""
+
+    # Always exclude these directories (they're not typically in .gitignore)
+    ALWAYS_EXCLUDED = {".git", ".venv", "__pycache__"}
+
+    def __init__(
+        self,
+        path: Path,
+        gitignore_filter: GitignoreFilter | None = None,
+        show_ignored: bool = False,
+        **kwargs,
+    ) -> None:
+        super().__init__(path, **kwargs)
+        self.gitignore_filter = gitignore_filter
+        self.show_ignored = show_ignored
+
+    def filter_paths(self, paths: Iterable[Path]) -> Iterable[Path]:
+        """Filter out gitignored paths."""
+        if self.show_ignored:
+            return paths
+
+        result = []
+        for p in paths:
+            # Always skip .git, .venv, __pycache__
+            if p.name in self.ALWAYS_EXCLUDED:
+                continue
+            # Skip gitignored files
+            if self.gitignore_filter and self.gitignore_filter.is_ignored(p):
+                continue
+            result.append(p)
+        return result
 
 
 class FileSearchModal(ModalScreen[Path | None]):
@@ -63,9 +172,16 @@ class FileSearchModal(ModalScreen[Path | None]):
     }
     """
 
-    def __init__(self, root_path: Path) -> None:
+    def __init__(
+        self,
+        root_path: Path,
+        gitignore_filter: GitignoreFilter | None = None,
+        show_ignored: bool = False,
+    ) -> None:
         super().__init__()
         self.root_path = root_path
+        self.gitignore_filter = gitignore_filter
+        self.show_ignored = show_ignored
         self.results: list[Path] = []
         self.selected_index = 0
 
@@ -88,12 +204,20 @@ class FileSearchModal(ModalScreen[Path | None]):
 
         # Search for files matching the query
         self.results = []
-        excluded_dirs = {".venv", ".git", "__pycache__"}
+        # Always exclude these directories (they're not typically in .gitignore)
+        always_excluded = {".git", ".venv", "__pycache__"}
         try:
             for path in self.root_path.rglob("*"):
-                # Skip files in excluded directories
-                if any(part in excluded_dirs for part in path.parts):
-                    continue
+                # Always skip .git, .venv, __pycache__ unless show_ignored
+                if not self.show_ignored:
+                    if any(part in always_excluded for part in path.parts):
+                        continue
+                    # Also skip gitignored files
+                    if (
+                        self.gitignore_filter
+                        and self.gitignore_filter.is_ignored(path)
+                    ):
+                        continue
                 if path.is_file() and query in path.name.lower():
                     self.results.append(path)
                     if len(self.results) >= 20:
@@ -462,19 +586,32 @@ class FileBrowserModal(ModalScreen[Path | None]):
     }
     """
 
-    def __init__(self, root_path: Path, current_file: Path | None = None) -> None:
+    def __init__(
+        self,
+        root_path: Path,
+        current_file: Path | None = None,
+        gitignore_filter: GitignoreFilter | None = None,
+        show_ignored: bool = False,
+    ) -> None:
         super().__init__()
         self.root_path = root_path
         self.current_file = current_file
+        self.gitignore_filter = gitignore_filter
+        self.show_ignored = show_ignored
 
     def compose(self) -> ComposeResult:
         with Vertical(id="browser-container"):
-            yield DirectoryTree(self.root_path, id="browser-tree")
+            yield FilteredDirectoryTree(
+                self.root_path,
+                gitignore_filter=self.gitignore_filter,
+                show_ignored=self.show_ignored,
+                id="browser-tree",
+            )
 
     async def on_mount(self) -> None:
         import asyncio
 
-        tree = self.query_one("#browser-tree", DirectoryTree)
+        tree = self.query_one("#browser-tree", FilteredDirectoryTree)
         tree.focus()
 
         # If we have a current file, expand to it
@@ -499,7 +636,7 @@ class FileBrowserModal(ModalScreen[Path | None]):
             except (ValueError, Exception):
                 pass  # File is not under root_path or other error
 
-    def _find_node_for_path(self, tree: DirectoryTree, target_path: Path):
+    def _find_node_for_path(self, tree: FilteredDirectoryTree, target_path: Path):
         """Find the tree node for a given path."""
 
         def search(node):
@@ -598,6 +735,7 @@ class IdiosApp(App):
         Binding("ctrl+g", "goto_line", "Go to Line"),
         Binding("ctrl+s", "save_file", "Save"),
         Binding("ctrl+shift+a", "toggle_autosave", "Toggle Autosave"),
+        Binding("ctrl+shift+i", "toggle_show_ignored", "Toggle Ignored"),
         Binding("ctrl+q", "confirm_quit", "Quit"),
         Binding("alt+down", "page_down", "Page Down", show=False),
         Binding("alt+up", "page_up", "Page Up", show=False),
@@ -618,6 +756,8 @@ class IdiosApp(App):
         self.autosave = True
         self.file_mtime: float | None = None  # Track file modification time
         self.checking_file_change = False  # Prevent multiple prompts
+        self.show_ignored = False  # Whether to show gitignored files
+        self.gitignore_filter = GitignoreFilter(self.root_path)
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -798,7 +938,13 @@ class IdiosApp(App):
                 self.editor.focus()
 
         self.push_screen(
-            FileBrowserModal(self.root_path, self.current_file), handle_result
+            FileBrowserModal(
+                self.root_path,
+                self.current_file,
+                self.gitignore_filter,
+                self.show_ignored,
+            ),
+            handle_result,
         )
 
     def action_search_files(self) -> None:
@@ -808,7 +954,14 @@ class IdiosApp(App):
             if path:
                 await self.open_file(path)
 
-        self.push_screen(FileSearchModal(self.root_path), handle_result)
+        self.push_screen(
+            FileSearchModal(
+                self.root_path,
+                self.gitignore_filter,
+                self.show_ignored,
+            ),
+            handle_result,
+        )
 
     def action_search_text(self) -> None:
         """Open the text search modal."""
@@ -875,6 +1028,12 @@ class IdiosApp(App):
         self.autosave = not self.autosave
         status = "ON" if self.autosave else "OFF"
         self.notify(f"Autosave: {status}")
+
+    def action_toggle_show_ignored(self) -> None:
+        """Toggle showing gitignored files in browser and search."""
+        self.show_ignored = not self.show_ignored
+        status = "visible" if self.show_ignored else "hidden"
+        self.notify(f"Gitignored files: {status}")
 
     def action_confirm_quit(self) -> None:
         """Show quit confirmation dialog."""
