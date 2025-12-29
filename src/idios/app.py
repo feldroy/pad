@@ -1,6 +1,6 @@
 """Idios - A command-line code editor built with Textual."""
 
-from pathlib import Path
+from pathlib import Path, PosixPath
 from typing import Iterable
 
 from textual.app import App, ComposeResult
@@ -353,6 +353,71 @@ class QuitConfirmModal(ModalScreen[bool]):
         self.dismiss(True)
 
 
+class FileChangedModal(ModalScreen[bool]):
+    """Modal for prompting user when file has changed on disk."""
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+    ]
+
+    CSS = """
+    FileChangedModal {
+        align: center middle;
+    }
+
+    #file-changed-container {
+        width: 50%;
+        max-width: 70;
+        height: auto;
+        background: $surface;
+        border: tall $warning;
+        padding: 1 2;
+    }
+
+    #file-changed-label {
+        text-align: center;
+        margin-bottom: 1;
+    }
+
+    #file-changed-buttons {
+        align: center middle;
+        height: auto;
+    }
+
+    .file-changed-button {
+        margin: 0 1;
+    }
+    """
+
+    def __init__(self, filename: str) -> None:
+        super().__init__()
+        self.filename = filename
+
+    def compose(self) -> ComposeResult:
+        from textual.widgets import Button
+
+        with Vertical(id="file-changed-container"):
+            yield Label(
+                f"'{self.filename}' has been modified on disk.\nDo you want to reload it?",
+                id="file-changed-label",
+            )
+            with Horizontal(id="file-changed-buttons"):
+                yield Button("Reload", id="reload-yes", classes="file-changed-button", variant="warning")
+                yield Button("Keep Current", id="reload-no", classes="file-changed-button")
+
+    def on_mount(self) -> None:
+        self.query_one("#reload-yes").focus()
+
+    def on_button_pressed(self, event) -> None:
+        if event.button.id == "reload-yes":
+            self.dismiss(True)
+        else:
+            self.dismiss(False)
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
+
+
 class FileBrowserModal(ModalScreen[Path | None]):
     """Modal for browsing and selecting files."""
 
@@ -528,6 +593,8 @@ class IdiosApp(App):
         self.editor: Editor | None = None
         self.file_modified = False
         self.autosave = True
+        self.file_mtime: float | None = None  # Track file modification time
+        self.checking_file_change = False  # Prevent multiple prompts
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -545,14 +612,84 @@ class IdiosApp(App):
             if readme_path.exists():
                 await self.open_file(readme_path)
 
+        # Start periodic file change detection (check every 2 seconds)
+        self.set_interval(2.0, self._check_file_changed)
+
     def _save_current_file(self) -> None:
         """Save the current file if modified."""
         if self.current_file and self.editor and self.file_modified:
             try:
                 self.current_file.write_text(self.editor.text)
                 self.file_modified = False
+                # Update mtime after saving
+                self.file_mtime = self.current_file.stat().st_mtime
             except Exception as e:
                 self.notify(f"Error saving file: {e}", severity="error")
+
+    def _check_file_changed(self) -> None:
+        """Check if the current file has been modified on disk."""
+        if (
+            self.current_file is None
+            or self.file_mtime is None
+            or self.checking_file_change
+            or not self.current_file.exists()
+        ):
+            return
+
+        try:
+            current_mtime = self.current_file.stat().st_mtime
+            if current_mtime > self.file_mtime:
+                self.checking_file_change = True
+                self._prompt_reload()
+        except Exception:
+            pass  # File might be temporarily unavailable
+
+    def _prompt_reload(self) -> None:
+        """Show modal asking user if they want to reload the file."""
+        if self.current_file is None:
+            return
+
+        async def handle_result(reload: bool) -> None:
+            if reload and self.current_file:
+                await self._reload_current_file()
+            else:
+                # User declined reload, update mtime to avoid repeated prompts
+                if self.current_file and self.current_file.exists():
+                    self.file_mtime = self.current_file.stat().st_mtime
+            self.checking_file_change = False
+            if self.editor:
+                self.editor.focus()
+
+        self.push_screen(FileChangedModal(self.current_file.name), handle_result)
+
+    async def _reload_current_file(self) -> None:
+        """Reload the current file from disk."""
+        if self.current_file is None or self.editor is None:
+            return
+
+        try:
+            content = self.current_file.read_text()
+            self.file_mtime = self.current_file.stat().st_mtime
+
+            # Preserve cursor position if possible
+            cursor_pos = self.editor.cursor_location
+
+            # Update editor content
+            self.editor.text = content
+            self.file_modified = False
+
+            # Restore cursor position (clamped to valid range)
+            line_count = content.count("\n") + 1
+            new_row = min(cursor_pos[0], line_count - 1)
+            self.editor.cursor_location = (new_row, cursor_pos[1])
+
+            # Update title
+            title = self.query_one("#editor-title", Static)
+            title.update(f" {self.current_file.name}")
+
+            self.notify(f"Reloaded {self.current_file.name}")
+        except Exception as e:
+            self.notify(f"Error reloading file: {e}", severity="error")
 
     async def open_file(self, path: Path) -> None:
         """Open a file in the editor."""
@@ -562,12 +699,14 @@ class IdiosApp(App):
 
         try:
             content = path.read_text()
+            self.file_mtime = path.stat().st_mtime  # Track modification time
         except Exception as e:
             self.notify(f"Error opening file: {e}", severity="error")
             return
 
         self.current_file = path
         self.file_modified = False
+        self.checking_file_change = False
 
         # Determine language for syntax highlighting
         language = self._get_language(path)
@@ -699,6 +838,7 @@ class IdiosApp(App):
             content = self.editor.text
             self.current_file.write_text(content)
             self.file_modified = False
+            self.file_mtime = self.current_file.stat().st_mtime  # Update mtime
             self.notify(f"Saved {self.current_file.name}")
         except Exception as e:
             self.notify(f"Error saving file: {e}", severity="error")
