@@ -1,7 +1,6 @@
 """Idios - A command-line code editor built with Textual."""
 
-from pathlib import Path, PosixPath
-from typing import Iterable
+from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -225,7 +224,9 @@ class TextSearchModal(ModalScreen[None]):
         # Move to next match
         self.current_match_index = (self.current_match_index + 1) % len(self.matches)
         match_label = self.query_one("#match-count", Label)
-        match_label.update(f"{self.current_match_index + 1} of {len(self.matches)} matches")
+        match_label.update(
+            f"{self.current_match_index + 1} of {len(self.matches)} matches"
+        )
 
         # Navigate to the match
         self.navigate_callback(self.matches[self.current_match_index])
@@ -270,7 +271,9 @@ class GoToLineModal(ModalScreen[int | None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="goto-container"):
-            yield Label(f"Type a line number between 1 and {self.max_line}", id="goto-label")
+            yield Label(
+                f"Type a line number between 1 and {self.max_line}", id="goto-label"
+            )
             yield Input(placeholder="Line number...", id="goto-input")
 
     def on_mount(self) -> None:
@@ -282,7 +285,10 @@ class GoToLineModal(ModalScreen[int | None]):
             if 1 <= line_num <= self.max_line:
                 self.dismiss(line_num)
             else:
-                self.notify(f"Line number must be between 1 and {self.max_line}", severity="warning")
+                self.notify(
+                    f"Line number must be between 1 and {self.max_line}",
+                    severity="warning",
+                )
         except ValueError:
             self.notify("Please enter a valid number", severity="warning")
 
@@ -333,9 +339,13 @@ class QuitConfirmModal(ModalScreen[bool]):
         with Vertical(id="quit-container"):
             yield Label("Are you sure you want to quit?", id="quit-label")
             with Horizontal(id="quit-buttons"):
-                yield Button("Yes", id="quit-yes", classes="quit-button", variant="error")
+                yield Button(
+                    "Yes", id="quit-yes", classes="quit-button", variant="error"
+                )
                 yield Button("No", id="quit-no", classes="quit-button")
-            yield Label("You can use ctrl+q again to quit.", id="quit-label-ctrl-q-again")
+            yield Label(
+                "You can use ctrl+q again to quit.", id="quit-label-ctrl-q-again"
+            )
 
     def on_mount(self) -> None:
         self.query_one("#quit-no").focus()
@@ -402,8 +412,15 @@ class FileChangedModal(ModalScreen[bool]):
                 id="file-changed-label",
             )
             with Horizontal(id="file-changed-buttons"):
-                yield Button("Reload", id="reload-yes", classes="file-changed-button", variant="warning")
-                yield Button("Keep Current", id="reload-no", classes="file-changed-button")
+                yield Button(
+                    "Reload",
+                    id="reload-yes",
+                    classes="file-changed-button",
+                    variant="warning",
+                )
+                yield Button(
+                    "Keep Current", id="reload-no", classes="file-changed-button"
+                )
 
     def on_mount(self) -> None:
         self.query_one("#reload-yes").focus()
@@ -484,6 +501,7 @@ class FileBrowserModal(ModalScreen[Path | None]):
 
     def _find_node_for_path(self, tree: DirectoryTree, target_path: Path):
         """Find the tree node for a given path."""
+
         def search(node):
             if hasattr(node, "data") and node.data and node.data.path == target_path:
                 return node
@@ -492,9 +510,12 @@ class FileBrowserModal(ModalScreen[Path | None]):
                 if result:
                     return result
             return None
+
         return search(tree.root)
 
-    def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
+    def on_directory_tree_file_selected(
+        self, event: DirectoryTree.FileSelected
+    ) -> None:
         self.dismiss(event.path)
 
     def action_cancel(self) -> None:
@@ -511,7 +532,9 @@ class Editor(TextArea):
     }
     """
 
-    def __init__(self, text: str = "", *, language: str | None = None, **kwargs) -> None:
+    def __init__(
+        self, text: str = "", *, language: str | None = None, **kwargs
+    ) -> None:
         super().__init__(
             text,
             language=language,
@@ -767,16 +790,20 @@ class IdiosApp(App):
 
     def action_toggle_browser(self) -> None:
         """Open the file browser modal."""
+
         async def handle_result(path: Path | None) -> None:
             if path:
                 await self.open_file(path)
             elif self.editor:
                 self.editor.focus()
 
-        self.push_screen(FileBrowserModal(self.root_path, self.current_file), handle_result)
+        self.push_screen(
+            FileBrowserModal(self.root_path, self.current_file), handle_result
+        )
 
     def action_search_files(self) -> None:
         """Open the file search modal."""
+
         async def handle_result(path: Path | None) -> None:
             if path:
                 await self.open_file(path)
@@ -851,6 +878,7 @@ class IdiosApp(App):
 
     def action_confirm_quit(self) -> None:
         """Show quit confirmation dialog."""
+
         def handle_result(confirmed: bool) -> None:
             if confirmed:
                 self.exit()
