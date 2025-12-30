@@ -21,6 +21,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "pyarmor>=9.2.3",
     "ruff>=0.14.10",
 ]
 pytest = [

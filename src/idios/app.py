@@ -669,6 +669,15 @@ class Editor(TextArea):
     }
     """
 
+    # Auto-close pairs: opening -> closing
+    AUTO_CLOSE_PAIRS = {
+        "(": ")",
+        "[": "]",
+        "{": "}",
+        '"': '"',
+        "'": "'",
+    }
+
     def __init__(
         self, text: str = "", *, language: str | None = None, **kwargs
     ) -> None:
@@ -680,6 +689,44 @@ class Editor(TextArea):
             show_line_numbers=True,
             **kwargs,
         )
+
+    def _on_key(self, event) -> None:
+        """Handle auto-closing of brackets and quotes."""
+        if event.character in self.AUTO_CLOSE_PAIRS:
+            closing = self.AUTO_CLOSE_PAIRS[event.character]
+            row, col = self.cursor_location
+
+            # Get current line text
+            lines = self.text.split("\n")
+            if row < len(lines):
+                line = lines[row]
+                char_after = line[col] if col < len(line) else ""
+
+                # For quotes: if next char is the same quote, just move past it
+                if event.character in ('"', "'") and char_after == event.character:
+                    self.cursor_location = (row, col + 1)
+                    event.prevent_default()
+                    return
+
+            # Insert both opening and closing, then move cursor back
+            self.insert(event.character + closing)
+            self.cursor_location = (row, col + 1)
+            event.prevent_default()
+            return
+
+        # Handle typing closing bracket when it's already there
+        if event.character in (")", "]", "}"):
+            row, col = self.cursor_location
+            lines = self.text.split("\n")
+            if row < len(lines):
+                line = lines[row]
+                if col < len(line) and line[col] == event.character:
+                    # Just move past the closing bracket
+                    self.cursor_location = (row, col + 1)
+                    event.prevent_default()
+                    return
+
+        super()._on_key(event)
 
 
 class EditorPane(Vertical):
