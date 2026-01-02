@@ -1,17 +1,10 @@
-# idios
+# Pad
 
-Idios (ἴδιος) is an Ancient Greek word that means:
-
-- one’s own
-- personal
-- distinct / peculiar to an individual
-- private, not involved in public affairs, which eventually turned into the word "idiot"
-
-It's also a terminal code editor for those of us who aren't into vim.
+Pad is an easy to use terminal code editor built with Textual for those of us who aren't into vim.
 
 ## Features
 
-- Powered by Textual TUI
+- Powered by Textual TUI so the accessibility is top notch
 - Runs in the shell
 - File browsing that can be opened or closed with cmd-b
 - File search can be done by toggling cmd-o
@@ -29,7 +22,7 @@ It's also a terminal code editor for those of us who aren't into vim.
 uv tool pad-app
 ```
 
-Currently idios is untested with any other installation method. If it works for your installation method, let me know and I'll add it to this section.
+Currently Pad is untested with any other installation method. If it works for your installation method, let me know and I'll add it to this section.
 
 ## Usage
 
