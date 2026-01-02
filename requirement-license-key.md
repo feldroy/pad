@@ -8,6 +8,7 @@ All users of the app must provide a valid license key to access its features. Th
 - The license manager will be polar.sh per these instructions: https://polar.sh/docs/features/benefits/license-keys
 - The license key will be checked daily to ensure continued access via the "Validate License Keys" feature in the docs above
 - The test license key is `FOUNDATION--77034B4F-8640-4839-8AE3-2E5FD2035607`, this is for development and testing purposes, but is not to be included in the app itself
+- Alternate license key is `PAD-1-34E73E1B-B916-4F28-B8CA-EBD05AAF596F`
 - Our organization ID is `242516e7-1a6a-4750-af47-f2cb6b99a337`
 - The license key is stored in a standard location for license keys on the user's system. As defined in ~/.config/pad-app/license-keys.json. The user can have multiple license keys and each will be checked in order
 - If the license key is invalid or missing, the user will be given a 1 day grace period to enter a valid license key to continue using the application. If the grace period is over, the user the application will exit and a message is printed in the shell explaining the user needs to contact the server
