@@ -331,6 +331,259 @@ class TestPromptForLicenseKey:
             assert result is None
 
 
+class TestGetHardwareId:
+    """Tests for get_hardware_id function."""
+
+    def test_returns_string(self):
+        """Should return a non-empty string."""
+        result = license.get_hardware_id()
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_returns_consistent_value(self):
+        """Should return the same value on multiple calls."""
+        result1 = license.get_hardware_id()
+        result2 = license.get_hardware_id()
+        assert result1 == result2
+
+    def test_returns_32_char_hash(self):
+        """Should return a 32-character hash."""
+        result = license.get_hardware_id()
+        assert len(result) == 32
+
+    def test_handles_subprocess_failure(self):
+        """Should return fallback ID when subprocess fails."""
+        with patch("subprocess.run", side_effect=OSError("Command not found")):
+            result = license.get_hardware_id()
+            assert isinstance(result, str)
+            assert len(result) == 32
+
+
+class TestLoadDeviceId:
+    """Tests for load_device_id function."""
+
+    def test_returns_none_when_file_not_exists(self, temp_config_dir: Path):
+        """Should return None when device file doesn't exist."""
+        result = license.load_device_id()
+        assert result is None
+
+    def test_loads_device_id_from_file(self, device_id_file: Path):
+        """Should load device ID from file."""
+        device_id_file.write_text(json.dumps({"device_id": "test-device-123"}))
+        result = license.load_device_id()
+        assert result == "test-device-123"
+
+    def test_returns_none_on_invalid_json(self, device_id_file: Path):
+        """Should return None when file contains invalid JSON."""
+        device_id_file.write_text("not valid json")
+        result = license.load_device_id()
+        assert result is None
+
+    def test_returns_none_on_missing_device_id_field(self, device_id_file: Path):
+        """Should return None when 'device_id' field is missing."""
+        device_id_file.write_text(json.dumps({"other": "data"}))
+        result = license.load_device_id()
+        assert result is None
+
+
+class TestSaveDeviceId:
+    """Tests for save_device_id function."""
+
+    def test_saves_device_id(self, temp_config_dir: Path, device_id_file: Path):
+        """Should save device ID to file."""
+        license.save_device_id("my-device-id")
+        data = json.loads(device_id_file.read_text())
+        assert data["device_id"] == "my-device-id"
+
+    def test_overwrites_existing_device_id(self, device_id_file: Path):
+        """Should overwrite existing device ID."""
+        device_id_file.write_text(json.dumps({"device_id": "old-device"}))
+        license.save_device_id("new-device")
+        data = json.loads(device_id_file.read_text())
+        assert data["device_id"] == "new-device"
+
+
+class TestIsDeviceActivated:
+    """Tests for is_device_activated function."""
+
+    def test_returns_false_when_no_device_file(self, temp_config_dir: Path):
+        """Should return False when device file doesn't exist."""
+        result = license.is_device_activated()
+        assert result is False
+
+    def test_returns_true_when_device_id_matches(self, temp_config_dir: Path, device_id_file: Path):
+        """Should return True when stored device ID matches current hardware."""
+        current_hw_id = license.get_hardware_id()
+        device_id_file.write_text(json.dumps({"device_id": current_hw_id}))
+        result = license.is_device_activated()
+        assert result is True
+
+    def test_returns_false_when_device_id_differs(self, device_id_file: Path):
+        """Should return False when stored device ID doesn't match."""
+        device_id_file.write_text(json.dumps({"device_id": "different-device-id"}))
+        result = license.is_device_activated()
+        assert result is False
+
+
+class TestValidateLicenseKeyWithUsage:
+    """Tests for validate_license_key_with_usage function."""
+
+    def test_returns_usage_info_on_success(self, httpx_mock):
+        """Should return usage info when validation succeeds."""
+        httpx_mock.add_response(
+            url=license.POLAR_VALIDATE_URL,
+            json={"status": "granted", "usage": 2, "limit_usage": 5},
+        )
+        result = license.validate_license_key_with_usage("test-key")
+        assert result.valid is True
+        assert result.usage == 2
+        assert result.limit == 5
+        assert result.error == ""
+
+    def test_sends_increment_usage_when_requested(self, httpx_mock):
+        """Should send increment_usage in request body when True."""
+        httpx_mock.add_response(
+            url=license.POLAR_VALIDATE_URL,
+            json={"status": "granted", "usage": 1, "limit_usage": 5},
+        )
+        license.validate_license_key_with_usage("test-key", increment_usage=True)
+        request = httpx_mock.get_request()
+        body = json.loads(request.content)
+        assert body["increment_usage"] == 1
+
+    def test_does_not_send_increment_usage_when_false(self, httpx_mock):
+        """Should not send increment_usage in request when False."""
+        httpx_mock.add_response(
+            url=license.POLAR_VALIDATE_URL,
+            json={"status": "granted"},
+        )
+        license.validate_license_key_with_usage("test-key", increment_usage=False)
+        request = httpx_mock.get_request()
+        body = json.loads(request.content)
+        assert "increment_usage" not in body
+
+    def test_raises_device_limit_exceeded_when_at_limit(self, httpx_mock):
+        """Should raise DeviceLimitExceeded when usage equals limit."""
+        httpx_mock.add_response(
+            url=license.POLAR_VALIDATE_URL,
+            json={"status": "usage_exceeded", "usage": 5, "limit_usage": 5},
+        )
+        with pytest.raises(license.DeviceLimitExceeded) as exc_info:
+            license.validate_license_key_with_usage("test-key")
+        assert exc_info.value.usage == 5
+        assert exc_info.value.limit == 5
+
+
+class TestDeviceLimitExceeded:
+    """Tests for DeviceLimitExceeded exception."""
+
+    def test_stores_usage_and_limit(self):
+        """Should store usage and limit values."""
+        exc = license.DeviceLimitExceeded(3, 5)
+        assert exc.usage == 3
+        assert exc.limit == 5
+
+    def test_message_contains_usage_info(self):
+        """Should have descriptive message."""
+        exc = license.DeviceLimitExceeded(3, 5)
+        assert "3" in str(exc)
+        assert "5" in str(exc)
+
+
+class TestGetDeviceUsage:
+    """Tests for get_device_usage function."""
+
+    def test_returns_usage_tuple(self, httpx_mock):
+        """Should return (usage, limit) tuple."""
+        httpx_mock.add_response(
+            url=license.POLAR_VALIDATE_URL,
+            json={"status": "granted", "usage": 2, "limit_usage": 5},
+        )
+        result = license.get_device_usage("test-key")
+        assert result == (2, 5)
+
+    def test_returns_none_when_no_limit(self, httpx_mock):
+        """Should return None when license has no limit."""
+        httpx_mock.add_response(
+            url=license.POLAR_VALIDATE_URL,
+            json={"status": "granted", "usage": 0, "limit_usage": 0},
+        )
+        result = license.get_device_usage("test-key")
+        assert result is None
+
+
+class TestDisplayDeviceUsage:
+    """Tests for display_device_usage function."""
+
+    def test_displays_usage_info(self, capsys):
+        """Should print usage information."""
+        license.display_device_usage(2, 5)
+        captured = capsys.readouterr()
+        assert "2/5" in captured.out
+        assert "3 more device(s)" in captured.out
+
+    def test_displays_limit_reached(self, capsys):
+        """Should indicate when limit is reached."""
+        license.display_device_usage(5, 5)
+        captured = capsys.readouterr()
+        assert "5/5" in captured.out
+        assert "reached your device limit" in captured.out
+
+
+class TestActivateDevice:
+    """Tests for activate_device function."""
+
+    def test_saves_device_id_on_success(self, temp_config_dir: Path, device_id_file: Path, httpx_mock):
+        """Should save device ID when activation succeeds."""
+        httpx_mock.add_response(
+            url=license.POLAR_VALIDATE_URL,
+            json={"status": "granted", "usage": 1, "limit_usage": 5},
+        )
+        result = license.activate_device("test-key")
+        assert result.valid is True
+        assert device_id_file.exists()
+        data = json.loads(device_id_file.read_text())
+        assert data["device_id"] == license.get_hardware_id()
+
+    def test_returns_invalid_result_on_invalid_key(self, temp_config_dir: Path, httpx_mock):
+        """Should return invalid result when key is invalid."""
+        httpx_mock.add_response(
+            url=license.POLAR_VALIDATE_URL,
+            status_code=404,
+        )
+        result = license.activate_device("invalid-key")
+        assert result.valid is False
+        assert "not found" in result.error.lower()
+
+    def test_raises_device_limit_exceeded(self, temp_config_dir: Path, httpx_mock):
+        """Should raise DeviceLimitExceeded when limit reached."""
+        httpx_mock.add_response(
+            url=license.POLAR_VALIDATE_URL,
+            json={"status": "usage_exceeded", "usage": 5, "limit_usage": 5},
+        )
+        with pytest.raises(license.DeviceLimitExceeded):
+            license.activate_device("test-key")
+
+
+class TestHandleDeviceLimitExceeded:
+    """Tests for handle_device_limit_exceeded function."""
+
+    def test_raises_typer_abort(self):
+        """Should raise typer.Abort."""
+        with pytest.raises(typer.Abort):
+            license.handle_device_limit_exceeded(5, 5)
+
+    def test_displays_usage_info(self, capsys):
+        """Should display usage information before aborting."""
+        try:
+            license.handle_device_limit_exceeded(3, 5)
+        except typer.Abort:
+            pass
+        captured = capsys.readouterr()
+        assert "3/5" in captured.out
+        assert "contact support" in captured.out.lower()
+
+
 class TestHandleInvalidLicense:
     """Tests for handle_invalid_license function."""
 
@@ -461,3 +714,51 @@ class TestCheckLicense:
 
         with pytest.raises(typer.Abort):
             license.check_license()
+
+    def test_activates_new_device(
+        self, temp_config_dir: Path, license_keys_file: Path, device_id_file: Path, httpx_mock
+    ):
+        """Should activate new device and save device ID."""
+        httpx_mock.add_response(
+            url=license.POLAR_VALIDATE_URL,
+            json={"status": "granted", "usage": 1, "limit_usage": 5},
+        )
+
+        result = license.check_license(provided_key="new-key")
+
+        assert result is True
+        assert device_id_file.exists()
+        data = json.loads(device_id_file.read_text())
+        assert data["device_id"] == license.get_hardware_id()
+
+    def test_does_not_increment_usage_for_activated_device(
+        self, temp_config_dir: Path, license_keys_file: Path, device_id_file: Path, httpx_mock
+    ):
+        """Should not increment usage when device is already activated."""
+        # Mark device as already activated
+        device_id_file.write_text(json.dumps({"device_id": license.get_hardware_id()}))
+
+        httpx_mock.add_response(
+            url=license.POLAR_VALIDATE_URL,
+            json={"status": "granted"},
+        )
+
+        result = license.check_license(provided_key="existing-key")
+
+        assert result is True
+        # Check that increment_usage was not sent
+        request = httpx_mock.get_request()
+        body = json.loads(request.content)
+        assert "increment_usage" not in body
+
+    def test_handles_device_limit_exceeded(
+        self, temp_config_dir: Path, httpx_mock
+    ):
+        """Should handle device limit exceeded gracefully."""
+        httpx_mock.add_response(
+            url=license.POLAR_VALIDATE_URL,
+            json={"status": "usage_exceeded", "usage": 5, "limit_usage": 5},
+        )
+
+        with pytest.raises(typer.Abort):
+            license.check_license(provided_key="new-key")

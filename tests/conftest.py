@@ -15,7 +15,8 @@ def temp_config_dir(tmp_path: Path):
 
     with patch("pad.license.CONFIG_DIR", config_dir), \
          patch("pad.license.LICENSE_KEYS_FILE", config_dir / "license-keys.json"), \
-         patch("pad.license.VALIDATION_CACHE_FILE", config_dir / "license-validate.json"):
+         patch("pad.license.VALIDATION_CACHE_FILE", config_dir / "license-validate.json"), \
+         patch("pad.license.DEVICE_ID_FILE", config_dir / "device.json"):
         yield config_dir
 
 
@@ -43,3 +44,9 @@ def stored_license_keys(license_keys_file: Path, sample_license_key: str) -> lis
     keys = [sample_license_key, "ANOTHER-KEY-67890"]
     license_keys_file.write_text(json.dumps({"keys": keys}, indent=2))
     return keys
+
+
+@pytest.fixture
+def device_id_file(temp_config_dir: Path) -> Path:
+    """Return path to the device ID file in temp config dir."""
+    return temp_config_dir / "device.json"
