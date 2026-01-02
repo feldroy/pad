@@ -1,5 +1,5 @@
 [project]
-name = "idios"
+name = "pad-app"
 version = "0.2.0"
 description = "A terminal code editor for those of us who aren't into vim."
 readme = "README.md"
@@ -13,11 +13,14 @@ dependencies = [
 ]
 
 [project.scripts]
-idios = "idios:app"
+pad = "pad:app"
 
 [build-system]
 requires = ["uv_build>=0.9.11,<0.10.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "pad"
 
 [dependency-groups]
 dev = [

@@ -26,7 +26,7 @@ It's also a terminal code editor for those of us who aren't into vim.
 ## Install
 
 ```sh
-uv tool idios
+uv tool pad-app
 ```
 
 Currently idios is untested with any other installation method. If it works for your installation method, let me know and I'll add it to this section.
@@ -36,11 +36,11 @@ Currently idios is untested with any other installation method. If it works for 
 Once installed, point it at a file: 
 
 ```sh
-idios myproject/README.md
+pad myproject/README.md
 ```
 
 Or a directory:
 
 ```sh
-idios myproject/
+pad myproject/
 ```

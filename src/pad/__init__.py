@@ -2,10 +2,10 @@ from pathlib import Path
 
 import typer
 
-from idios.app import run
+from pad.app import run
 
 app = typer.Typer(
-    name="idios",
+    name="pad",
     help="A command-line code editor.",
     add_completion=False,
 )
@@ -13,5 +13,5 @@ app = typer.Typer(
 
 @app.callback(invoke_without_command=True)
 def main(path: Path = typer.Argument(default=Path("."))) -> None:
-    """Launch the Idios code editor."""
+    """Launch the Pad code editor."""
     run(path.resolve())

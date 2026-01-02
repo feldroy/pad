@@ -1,4 +1,4 @@
-"""Idios - A command-line code editor built with Textual."""
+"""Pad - A command-line code editor built with Textual."""
 
 import fnmatch
 from pathlib import Path
@@ -758,10 +758,10 @@ class EditorPane(Vertical):
         yield Static("Press Ctrl+b to search for a file", id="no-file")
 
 
-class IdiosApp(App):
+class PadApp(App):
     """A command-line code editor."""
 
-    TITLE = "Idios"
+    TITLE = "Pad"
 
     CSS = """
     #main-container {
@@ -1135,6 +1135,6 @@ class IdiosApp(App):
 
 
 def run(path: Path) -> None:
-    """Run the Idios application."""
-    app = IdiosApp(path)
+    """Run the Pad application."""
+    app = PadApp(path)
     app.run()
