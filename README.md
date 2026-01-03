@@ -1,4 +1,7 @@
-# Pad
+<p align="center">
+<img src="https://raw.githubusercontent.com/worldimpactlab/pad-app/refs/heads/main/pad-logo.png?token=GHSAT0AAAAAACYGXA6D6UOKJ3T54Y5JNIG62KY673Q" alt="Pad Logo" width="200"/>
+</p>
+
 
 Pad is an easy to use terminal code editor built with Textual for those of us who aren't into vim.
 
