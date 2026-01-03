@@ -16,6 +16,7 @@ Pad is an easy to use terminal code editor built with Textual for those of us wh
 - Copy (cmd-c) and paste (cmd-v) uses standard IDE keys
 - Search in a file with ctrl+f
 - Go to a line with ctrl+g
+- File content search with ctrl+shift+f
 - If not pointed at a file, opens the current directory, default open file is any README.md that may exist
 - Watches the current file and lets you know if there have been changes
 - Responsive, resize the window and it still looks good

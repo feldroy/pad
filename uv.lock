@@ -75,6 +75,18 @@ wheels = [
 ]
 
 [[package]]
+name = "fire"
+version = "0.7.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "termcolor" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c0/00/f8d10588d2019d6d6452653def1ee807353b21983db48550318424b5ff18/fire-0.7.1.tar.gz", hash = "sha256:3b208f05c736de98fb343310d090dcc4d8c78b2a89ea4f32b837c586270a9cbf", size = 88720, upload-time = "2025-08-16T20:20:24.175Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e5/4c/93d0f85318da65923e4b91c1c2ff03d8a458cbefebe3bc612a6693c7906d/fire-0.7.1-py3-none-any.whl", hash = "sha256:e43fd8a5033a9001e7e2973bab96070694b9f12f2e0ecf96d4683971b5ab1882", size = 115945, upload-time = "2025-08-16T20:20:22.87Z" },
+]
+
+[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -199,12 +211,13 @@ wheels = [
 
 [[package]]
 name = "pad-app"
-version = "0.2.4"
+version = "0.2.5"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
     { name = "textual", extra = ["syntax"] },
     { name = "typer" },
+    { name = "vexy-glob" },
 ]
 
 [package.dev-dependencies]
@@ -221,6 +234,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "textual", extras = ["syntax"], specifier = ">=3.0.0" },
     { name = "typer", specifier = ">=0.21.0" },
+    { name = "vexy-glob", specifier = ">=1.0.9" },
 ]
 
 [package.metadata.requires-dev]
@@ -481,6 +495,15 @@ dependencies = [
     { name = "types-python-dateutil" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/48/c8/4c9705c0499c8b5ac54a082539d4cdf1c6b3977b7475d60fcb7c666efc86/standardwebhooks-1.0.0.tar.gz", hash = "sha256:d94b99c0dcea84156e03adad94f8dba32d5454cc68e12ec2c824051b55bb67ff", size = 4919, upload-time = "2024-01-12T14:57:43.193Z" }
+
+[[package]]
+name = "termcolor"
+version = "3.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/46/79/cf31d7a93a8fdc6aa0fbb665be84426a8c5a557d9240b6239e9e11e35fc5/termcolor-3.3.0.tar.gz", hash = "sha256:348871ca648ec6a9a983a13ab626c0acce02f515b9e1983332b17af7979521c5", size = 14434, upload-time = "2025-12-29T12:55:21.882Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/33/d1/8bb87d21e9aeb323cc03034f5eaf2c8f69841e40e4853c2627edf8111ed3/termcolor-3.3.0-py3-none-any.whl", hash = "sha256:cf642efadaf0a8ebbbf4bc7a31cec2f9b5f21a9f726f4ccbb08192c9c26f43a5", size = 7734, upload-time = "2025-12-29T12:55:20.718Z" },
+]
 
 [[package]]
 name = "textual"
@@ -829,6 +852,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/91/7a/146a99696aee0609e3712f2b44c6274566bc368dfe8375191278045186b8/uc-micro-py-1.0.3.tar.gz", hash = "sha256:d321b92cff673ec58027c04015fcaa8bb1e005478643ff4a500882eaab88c48a", size = 6043, upload-time = "2024-02-09T16:52:01.654Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/37/87/1f677586e8ac487e29672e4b17455758fce261de06a0d086167bb760361a/uc_micro_py-1.0.3-py3-none-any.whl", hash = "sha256:db1dffff340817673d7b466ec86114a9dc0e9d4d9b5ba229d9d60e5c12600cd5", size = 6229, upload-time = "2024-02-09T16:52:00.371Z" },
+]
+
+[[package]]
+name = "vexy-glob"
+version = "1.0.9"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "fire" },
+    { name = "rich" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/25/ab/be754b19c7acea5ad55aa5311f4935ce96d38fb9b10b07ec799efefe6597/vexy_glob-1.0.9.tar.gz", hash = "sha256:e334f8fb78d0e269768c4b8537f699821611c76b2ab62cbdb3c2298715071a08", size = 268795, upload-time = "2025-08-04T23:39:59.57Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/52/a2/5d3c74a12fa93f6567e4c3d69c255b7cdcba58e6971f25c7b7672a288f53/vexy_glob-1.0.9-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:fafc08862efcea87b309525ba0a47f1c827b969ef55ba7f5bdb9a91b59a9a324", size = 1124707, upload-time = "2025-08-04T23:40:02.164Z" },
 ]
 
 [[package]]

@@ -4,6 +4,8 @@ import fnmatch
 from pathlib import Path
 from typing import Iterable
 
+import vexy_glob
+
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
@@ -354,6 +356,214 @@ class TextSearchModal(ModalScreen[None]):
 
         # Navigate to the match
         self.navigate_callback(self.matches[self.current_match_index])
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
+class ContentSearchModal(ModalScreen[tuple[Path, int] | None]):
+    """Modal for searching content across all files in the project."""
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+    ]
+
+    CSS = """
+    ContentSearchModal {
+        align: center middle;
+    }
+
+    #content-search-container {
+        width: 60%;
+        max-width: 100;
+        height: 80%;
+        background: $surface;
+        border: tall $primary;
+        padding: 1 2;
+    }
+
+    #content-search-header {
+        height: auto;
+        margin-bottom: 1;
+    }
+
+    #content-search-input {
+        width: 100%;
+        margin-bottom: 1;
+    }
+
+    #case-sensitive-container {
+        height: 1;
+        margin-bottom: 1;
+    }
+
+    #case-sensitive-label {
+        margin-left: 1;
+    }
+
+    #content-results {
+        height: 1fr;
+        overflow-y: auto;
+    }
+
+    .content-result {
+        padding: 0 1;
+    }
+
+    .content-result:hover {
+        background: $accent;
+    }
+
+    .content-result.--selected {
+        background: $accent;
+    }
+
+    #search-status {
+        height: 1;
+        color: $text-muted;
+        margin-top: 1;
+    }
+    """
+
+    def __init__(self, root_path: Path) -> None:
+        super().__init__()
+        self.root_path = root_path
+        self.results: list[tuple[Path, int, str]] = []  # (path, line_num, line_text)
+        self.selected_index = 0
+        self.case_sensitive = False
+
+    def compose(self) -> ComposeResult:
+        from textual.widgets import Checkbox
+
+        with Vertical(id="content-search-container"):
+            yield Input(placeholder="Search content across files...", id="content-search-input")
+            with Horizontal(id="case-sensitive-container"):
+                yield Checkbox("Case sensitive", id="case-sensitive-checkbox", value=False)
+            yield Vertical(id="content-results")
+            yield Label("", id="search-status")
+
+    def on_mount(self) -> None:
+        self.query_one("#content-search-input", Input).focus()
+
+    def on_checkbox_changed(self, event) -> None:
+        if event.checkbox.id == "case-sensitive-checkbox":
+            self.case_sensitive = event.value
+            # Re-run search with new case sensitivity
+            search_input = self.query_one("#content-search-input", Input)
+            if search_input.value:
+                self._perform_search(search_input.value)
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "content-search-input":
+            if self.results:
+                path, line_num, _ = self.results[self.selected_index]
+                self.dismiss((path, line_num))
+            else:
+                self._perform_search(event.value)
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id == "content-search-input":
+            self._perform_search(event.value)
+
+    def _perform_search(self, query: str) -> None:
+        results_container = self.query_one("#content-results", Vertical)
+        status_label = self.query_one("#search-status", Label)
+        results_container.remove_children()
+
+        if not query or len(query) < 2:
+            self.results = []
+            status_label.update("Type at least 2 characters to search")
+            return
+
+        status_label.update("Searching...")
+        self.results = []
+
+        try:
+            # Use vexy_glob to search file contents
+            # Use iterator (as_list=False) to avoid loading all results into memory
+            matches = vexy_glob.find(
+                pattern="*",
+                root=self.root_path,
+                content=query,
+                ignore_git=True,
+                case_sensitive=self.case_sensitive,
+                as_list=False,
+            )
+
+            for match in matches:
+                if len(self.results) >= 100:
+                    break
+                # Each match is a dict with path, line_number, line_text keys
+                self.results.append((
+                    Path(match["path"]),
+                    match["line_number"],
+                    match["line_text"].strip()[:80]  # Truncate long lines
+                ))
+
+        except Exception as e:
+            status_label.update(f"Search error: {e}")
+            return
+
+        self.selected_index = 0
+        if not self.results:
+            status_label.update("No matches found")
+            return
+
+        if len(self.results) >= 100:
+            status_label.update(f"Showing first 100 matches (more available)")
+        else:
+            status_label.update(f"Found {len(self.results)} matches")
+
+        for i, (path, line_num, line_text) in enumerate(self.results):
+            try:
+                relative = path.relative_to(self.root_path)
+            except ValueError:
+                relative = path
+            display_text = f"{relative}:{line_num}: {line_text}"
+            label = Label(display_text, classes="content-result")
+            if i == 0:
+                label.add_class("--selected")
+            results_container.mount(label)
+
+    def on_key(self, event) -> None:
+        if event.key == "down" and self.results:
+            self._update_selection(1)
+            event.prevent_default()
+        elif event.key == "up" and self.results:
+            self._update_selection(-1)
+            event.prevent_default()
+        elif event.key == "enter" and self.results:
+            path, line_num, _ = self.results[self.selected_index]
+            self.dismiss((path, line_num))
+            event.prevent_default()
+
+    def _update_selection(self, delta: int) -> None:
+        if not self.results:
+            return
+
+        results = self.query(".content-result")
+        if results:
+            results[self.selected_index].remove_class("--selected")
+
+        self.selected_index = (self.selected_index + delta) % len(self.results)
+
+        if results:
+            selected = results[self.selected_index]
+            selected.add_class("--selected")
+            # Scroll selected item into view
+            selected.scroll_visible()
+
+    def on_label_clicked(self, event) -> None:
+        """Handle clicking on a search result."""
+        if "content-result" in event.label.classes:
+            results = list(self.query(".content-result"))
+            try:
+                index = results.index(event.label)
+                if index < len(self.results):
+                    path, line_num, _ = self.results[index]
+                    self.dismiss((path, line_num))
+            except ValueError:
+                pass
 
     def action_cancel(self) -> None:
         self.dismiss(None)
@@ -788,6 +998,7 @@ class PadApp(App):
         Binding("ctrl+b", "toggle_browser", "Browse Files"),
         Binding("ctrl+o", "search_files", "Search Files"),
         Binding("ctrl+f", "search_text", "Find"),
+        Binding("ctrl+shift+f", "search_content", "Search Content"),
         Binding("ctrl+g", "goto_line", "Go to Line"),
         Binding("ctrl+s", "save_file", "Save"),
         Binding("ctrl+shift+a", "toggle_autosave", "Toggle Autosave"),
@@ -1036,6 +1247,27 @@ class PadApp(App):
                 self.editor.scroll_to(0, scroll_y, animate=False)
 
         self.push_screen(TextSearchModal(self.editor.text, navigate_to_match))
+
+    def action_search_content(self) -> None:
+        """Open the content search modal to search across all project files."""
+
+        async def handle_result(result: tuple[Path, int] | None) -> None:
+            if result:
+                path, line_number = result
+                await self.open_file(path)
+                # Navigate to the matching line
+                if self.editor:
+                    # TextArea uses 0-indexed rows
+                    target_row = line_number - 1
+                    self.editor.cursor_location = (target_row, 0)
+                    # Center the line in the viewport
+                    viewport_height = self.editor.size.height
+                    scroll_y = max(0, target_row - viewport_height // 2)
+                    self.editor.scroll_to(0, scroll_y, animate=False)
+            elif self.editor:
+                self.editor.focus()
+
+        self.push_screen(ContentSearchModal(self.root_path), handle_result)
 
     def action_goto_line(self) -> None:
         """Open the go to line modal."""
