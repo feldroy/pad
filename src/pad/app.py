@@ -669,6 +669,15 @@ class Editor(TextArea):
     }
     """
 
+    # Override TextArea's default ctrl+f binding to bubble up to app
+    BINDINGS = [
+        Binding("ctrl+f", "app_search_text", "Find", priority=True),
+    ]
+
+    def action_app_search_text(self) -> None:
+        """Bubble up to app's search_text action."""
+        self.app.action_search_text()
+
     # Auto-close pairs: opening -> closing
     AUTO_CLOSE_PAIRS = {
         "(": ")",
@@ -778,7 +787,7 @@ class PadApp(App):
     BINDINGS = [
         Binding("ctrl+b", "toggle_browser", "Browse Files"),
         Binding("ctrl+o", "search_files", "Search Files"),
-        Binding("ctrl+h", "search_text", "Find"),
+        Binding("ctrl+f", "search_text", "Find"),
         Binding("ctrl+g", "goto_line", "Go to Line"),
         Binding("ctrl+s", "save_file", "Save"),
         Binding("ctrl+shift+a", "toggle_autosave", "Toggle Autosave"),
