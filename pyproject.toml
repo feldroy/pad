@@ -25,6 +25,7 @@ module-name = "pad"
 
 [dependency-groups]
 dev = [
+    "polar-sdk>=0.28.1",
     "pyarmor>=9.2.3",
     "pytest>=8.0.0",
     "pytest-httpx>=0.35.0",
