@@ -21,6 +21,9 @@ Pad is an easy to use terminal code editor for those of us who aren't into vim.
     - `ctrl+b:` file browser
     - `ctrl+o:` file search
     - `ctrl+shift+f`: Fast file content search
+    - `ctrl+q:` quit Pad
+    - `alt+up arrow:` Page up
+    - `alt+down arrow:` Page down
 
 ## Install
 
