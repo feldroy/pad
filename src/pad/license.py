@@ -1,5 +1,6 @@
 """License key management for pad-app using polar.sh."""
 
+import base64
 import hashlib
 import json
 import platform
@@ -10,6 +11,9 @@ from pathlib import Path
 
 import httpx
 import typer
+from cryptography.fernet import Fernet, InvalidToken
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 ORGANIZATION_ID = "242516e7-1a6a-4750-af47-f2cb6b99a337"
 POLAR_VALIDATE_URL = "https://api.polar.sh/v1/customer-portal/license-keys/validate"
@@ -19,6 +23,47 @@ VALIDATION_CACHE_FILE = CONFIG_DIR / "license-validate.json"
 DEVICE_ID_FILE = CONFIG_DIR / "device.json"
 GRACE_PERIOD_DAYS = 1
 SKIPPER = 'Blarg.123'
+ENCRYPTION_SALT = b"pad-app-license-validation-salt"
+
+
+def derive_fernet_key(license_key: str) -> bytes:
+    """Derive a valid Fernet key from a license key string.
+
+    Uses PBKDF2 to derive a 32-byte key suitable for Fernet encryption.
+    """
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=ENCRYPTION_SALT,
+        iterations=100_000,
+    )
+    key = kdf.derive(license_key.encode())
+    return base64.urlsafe_b64encode(key)
+
+
+def encrypt_timestamp(timestamp: str, license_key: str) -> str:
+    """Encrypt a timestamp string using the license key.
+
+    Returns the encrypted timestamp as a base64-encoded string.
+    """
+    fernet_key = derive_fernet_key(license_key)
+    fernet = Fernet(fernet_key)
+    encrypted = fernet.encrypt(timestamp.encode())
+    return encrypted.decode()
+
+
+def decrypt_timestamp(encrypted_timestamp: str, license_key: str) -> str | None:
+    """Decrypt an encrypted timestamp using the license key.
+
+    Returns the decrypted timestamp string, or None if decryption fails.
+    """
+    try:
+        fernet_key = derive_fernet_key(license_key)
+        fernet = Fernet(fernet_key)
+        decrypted = fernet.decrypt(encrypted_timestamp.encode())
+        return decrypted.decode()
+    except (InvalidToken, ValueError):
+        return None
 
 
 def get_config_dir() -> Path:
@@ -132,23 +177,46 @@ def save_license_key(key: str) -> None:
 
 
 def load_validation_cache() -> dict:
-    """Load validation cache from storage."""
+    """Load validation cache from storage.
+
+    Decrypts the last_validated_at timestamp using the stored license key.
+    Returns an empty dict if decryption fails (triggers re-validation).
+    """
     get_config_dir()
     if not VALIDATION_CACHE_FILE.exists():
         return {}
     try:
-        return json.loads(VALIDATION_CACHE_FILE.read_text())
+        cache = json.loads(VALIDATION_CACHE_FILE.read_text())
     except json.JSONDecodeError:
         return {}
 
+    # Decrypt the timestamp if present
+    encrypted_timestamp = cache.get("last_validated_at")
+    license_key = cache.get("last_validated_key")
+
+    if encrypted_timestamp and license_key:
+        decrypted = decrypt_timestamp(encrypted_timestamp, license_key)
+        if decrypted is None:
+            # Decryption failed - treat as invalid cache
+            return {}
+        cache["last_validated_at"] = decrypted
+
+    return cache
+
 
 def save_validation_cache(key: str, valid: bool) -> None:
-    """Save validation result to cache."""
+    """Save validation result to cache.
+
+    The last_validated_at timestamp is encrypted using the license key.
+    """
     get_config_dir()
-    cache = load_validation_cache()
-    cache["last_validated_at"] = datetime.now().isoformat()
-    cache["last_validated_key"] = key
-    cache["valid"] = valid
+    timestamp = datetime.now().isoformat()
+    encrypted_timestamp = encrypt_timestamp(timestamp, key)
+    cache = {
+        "last_validated_at": encrypted_timestamp,
+        "last_validated_key": key,
+        "valid": valid,
+    }
     VALIDATION_CACHE_FILE.write_text(json.dumps(cache, indent=2))
 
 

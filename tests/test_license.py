@@ -104,16 +104,21 @@ class TestLoadValidationCache:
         assert result == {}
 
     def test_loads_cache_from_file(self, validation_cache_file: Path):
-        """Should load cache data from file."""
+        """Should load and decrypt cache data from file."""
+        timestamp = "2024-01-15T10:00:00"
+        license_key = "test-key"
+        encrypted_timestamp = license.encrypt_timestamp(timestamp, license_key)
         cache_data = {
-            "last_validated_at": "2024-01-15T10:00:00",
-            "last_validated_key": "test-key",
+            "last_validated_at": encrypted_timestamp,
+            "last_validated_key": license_key,
             "valid": True,
         }
         validation_cache_file.write_text(json.dumps(cache_data))
 
         result = license.load_validation_cache()
-        assert result == cache_data
+        assert result["last_validated_at"] == timestamp
+        assert result["last_validated_key"] == license_key
+        assert result["valid"] is True
 
     def test_returns_empty_dict_on_invalid_json(self, validation_cache_file: Path):
         """Should return empty dict when file contains invalid JSON."""
@@ -640,11 +645,13 @@ class TestCheckLicense:
         self, temp_config_dir: Path, license_keys_file: Path, validation_cache_file: Path
     ):
         """Should use cached result when recently validated."""
-        license_keys_file.write_text(json.dumps({"keys": ["cached-key"]}))
+        license_key = "cached-key"
+        license_keys_file.write_text(json.dumps({"keys": [license_key]}))
         recent_time = datetime.now() - timedelta(hours=12)
+        encrypted_timestamp = license.encrypt_timestamp(recent_time.isoformat(), license_key)
         validation_cache_file.write_text(json.dumps({
-            "last_validated_at": recent_time.isoformat(),
-            "last_validated_key": "cached-key",
+            "last_validated_at": encrypted_timestamp,
+            "last_validated_key": license_key,
             "valid": True,
         }))
 
@@ -655,11 +662,13 @@ class TestCheckLicense:
         self, temp_config_dir: Path, license_keys_file: Path, validation_cache_file: Path, httpx_mock
     ):
         """Should revalidate when cache is expired."""
-        license_keys_file.write_text(json.dumps({"keys": ["stored-key"]}))
+        license_key = "stored-key"
+        license_keys_file.write_text(json.dumps({"keys": [license_key]}))
         old_time = datetime.now() - timedelta(days=2)
+        encrypted_timestamp = license.encrypt_timestamp(old_time.isoformat(), license_key)
         validation_cache_file.write_text(json.dumps({
-            "last_validated_at": old_time.isoformat(),
-            "last_validated_key": "stored-key",
+            "last_validated_at": encrypted_timestamp,
+            "last_validated_key": license_key,
             "valid": True,
         }))
 
