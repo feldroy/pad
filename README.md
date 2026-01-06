@@ -51,7 +51,7 @@ pad myproject/
 
 You get 7 days to try Pad for free. After that, you'll need to purchase a subscription to continue using it.
 
-A subscription includes 10 device activations. This accounts for spare devices, operating system resets, and even sharing with a few friends so they can try out Pad. If you run out of activitions for your individual needs, let us know and we'll figure something out.
+A subscription includes 10 device activations. This accounts for spare devices, operating system resets, and even sharing with a few friends so they can try out Pad. If you run out of activations for your individual needs, let us know and we'll figure something out.
 
 If you want to purchase Pad for a team, contact us, and we'll set you up with a custom plan.
 
