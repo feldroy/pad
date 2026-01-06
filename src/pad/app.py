@@ -59,8 +59,20 @@ class GitignoreFilter:
         except ValueError:
             return False
 
+        # Check the path itself and all parent directories
+        # If any parent is ignored, the path should be ignored too
+        paths_to_check = [relative] + list(relative.parents)[:-1]  # Exclude '.'
+
+        for check_path in paths_to_check:
+            if self._path_matches_patterns(check_path, path if check_path == relative else self.root_path / check_path):
+                return True
+
+        return False
+
+    def _path_matches_patterns(self, relative: Path, full_path: Path) -> bool:
+        """Check if a specific path matches any gitignore pattern."""
         relative_str = str(relative)
-        name = path.name
+        name = relative.name
 
         ignored = False
         for pattern, is_negation in self.patterns:
@@ -68,7 +80,7 @@ class GitignoreFilter:
 
             # Handle directory-only patterns (ending with /)
             if pattern.endswith("/"):
-                if path.is_dir():
+                if full_path.is_dir():
                     pattern = pattern[:-1]
                 else:
                     continue
@@ -425,12 +437,21 @@ class ContentSearchModal(ModalScreen[tuple[Path, int] | None]):
     }
     """
 
-    def __init__(self, root_path: Path) -> None:
+    def __init__(
+        self,
+        root_path: Path,
+        gitignore_filter: GitignoreFilter | None = None,
+        show_ignored: bool = False,
+    ) -> None:
         super().__init__()
         self.root_path = root_path
+        self.gitignore_filter = gitignore_filter
+        self.show_ignored = show_ignored
         self.results: list[tuple[Path, int, str]] = []  # (path, line_num, line_text)
         self.selected_index = 0
         self.case_sensitive = False
+        # Always exclude these directories
+        self.always_excluded = {".git", ".venv", "__pycache__"}
 
     def compose(self) -> ComposeResult:
         from textual.widgets import Checkbox
@@ -494,8 +515,19 @@ class ContentSearchModal(ModalScreen[tuple[Path, int] | None]):
                 if len(self.results) >= 100:
                     break
                 # Each match is a dict with path, line_number, line_text keys
+                match_path = Path(match["path"])
+
+                # Skip ignored files unless show_ignored is True
+                if not self.show_ignored:
+                    # Check always excluded directories
+                    if any(part in self.always_excluded for part in match_path.parts):
+                        continue
+                    # Check gitignore patterns
+                    if self.gitignore_filter and self.gitignore_filter.is_ignored(match_path):
+                        continue
+
                 self.results.append((
-                    Path(match["path"]),
+                    match_path,
                     match["line_number"],
                     match["line_text"].strip()[:80]  # Truncate long lines
                 ))
@@ -1267,7 +1299,14 @@ class PadApp(App):
             elif self.editor:
                 self.editor.focus()
 
-        self.push_screen(ContentSearchModal(self.root_path), handle_result)
+        self.push_screen(
+            ContentSearchModal(
+                self.root_path,
+                self.gitignore_filter,
+                self.show_ignored,
+            ),
+            handle_result,
+        )
 
     def action_goto_line(self) -> None:
         """Open the go to line modal."""

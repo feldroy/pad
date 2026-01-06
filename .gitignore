@@ -11,3 +11,4 @@ wheels/
 .venv
 .ruff_cache
 pyarmor-*
+.pytest_cache
