@@ -9,14 +9,14 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import httpx
 import typer
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from polar_sdk import Polar
+from polar_sdk.models import HTTPValidationError, ResourceNotFound, SDKError
 
 ORGANIZATION_ID = "242516e7-1a6a-4750-af47-f2cb6b99a337"
-POLAR_VALIDATE_URL = "https://api.polar.sh/v1/customer-portal/license-keys/validate"
 CONFIG_DIR = Path.home() / ".config" / "pad-app"
 LICENSE_KEYS_FILE = CONFIG_DIR / "license-keys.json"
 VALIDATION_CACHE_FILE = CONFIG_DIR / "license-validate.json"
@@ -292,54 +292,55 @@ def validate_license_key_with_usage(
         )
 
     try:
-        request_body = {"key": key, "organization_id": ORGANIZATION_ID}
+        request_params: dict = {
+            "key": key,
+            "organization_id": ORGANIZATION_ID,
+        }
         if increment_usage:
-            request_body["increment_usage"] = 1
+            request_params["increment_usage"] = 1
 
-        response = httpx.post(
-            POLAR_VALIDATE_URL,
-            json=request_body,
-            timeout=10.0,
+        with Polar() as polar:
+            response = polar.customer_portal.license_keys.validate(
+                request=request_params
+            )
+
+        status = (response.status or "").lower()
+        usage = response.usage or 0
+        limit = response.limit_usage or 0
+
+        if status in ("granted", "active"):
+            return LicenseValidationResult(
+                valid=True, error="", usage=usage, limit=limit
+            )
+
+        # Check if this is a device limit issue
+        if limit > 0 and usage >= limit:
+            raise DeviceLimitExceeded(usage, limit)
+
+        return LicenseValidationResult(
+            valid=False,
+            error=f"License key status: {status}",
+            usage=usage,
+            limit=limit,
         )
-        if response.status_code == 200:
-            data = response.json()
-            status = data.get("status", "").lower()
-            usage = data.get("usage", 0)
-            limit = data.get("limit_usage", 0)
-
-            if status in ("granted", "active"):
-                return LicenseValidationResult(
-                    valid=True, error="", usage=usage, limit=limit
-                )
-
-            # Check if this is a device limit issue
-            if limit > 0 and usage >= limit:
-                raise DeviceLimitExceeded(usage, limit)
-
-            return LicenseValidationResult(
-                valid=False,
-                error=f"License key status: {status}",
-                usage=usage,
-                limit=limit,
-            )
-        elif response.status_code == 404:
-            return LicenseValidationResult(valid=False, error="License key not found")
-        elif response.status_code == 422:
-            return LicenseValidationResult(
-                valid=False, error="Invalid license key format"
-            )
-        else:
-            return LicenseValidationResult(
-                valid=False, error=f"Validation failed (HTTP {response.status_code})"
-            )
     except DeviceLimitExceeded:
         raise
-    except httpx.TimeoutException:
+    except ResourceNotFound:
+        return LicenseValidationResult(valid=False, error="License key not found")
+    except HTTPValidationError:
+        return LicenseValidationResult(
+            valid=False, error="Invalid license key format"
+        )
+    except SDKError as e:
+        return LicenseValidationResult(
+            valid=False, error=f"Validation failed (HTTP {e.status_code})"
+        )
+    except TimeoutError:
         return LicenseValidationResult(
             valid=False,
             error="Connection timeout - please check your internet connection",
         )
-    except httpx.RequestError as e:
+    except Exception as e:
         return LicenseValidationResult(valid=False, error=f"Network error: {e}")
 
 

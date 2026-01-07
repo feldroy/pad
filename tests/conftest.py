@@ -2,9 +2,24 @@
 
 import json
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
+
+
+@pytest.fixture
+def polar_mock():
+    """Create a mock for the Polar SDK client."""
+    with patch("pad.license.Polar") as mock_polar_class:
+        mock_polar = MagicMock()
+        mock_polar_class.return_value.__enter__ = MagicMock(return_value=mock_polar)
+        mock_polar_class.return_value.__exit__ = MagicMock(return_value=False)
+
+        # Store references for easy access in tests
+        mock_polar_class.mock_instance = mock_polar
+        mock_polar_class.validate = mock_polar.customer_portal.license_keys.validate
+
+        yield mock_polar_class
 
 
 @pytest.fixture

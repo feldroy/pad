@@ -3,13 +3,50 @@
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-import httpx
 import pytest
 import typer
+from polar_sdk.models import HTTPValidationError, ResourceNotFound, SDKError
 
 from pad import license
+
+
+class MockValidatedLicenseKey:
+    """Mock object for ValidatedLicenseKey response from Polar SDK."""
+
+    def __init__(self, status: str = "granted", usage: int = 0, limit_usage: int = 0):
+        self.status = status
+        self.usage = usage
+        self.limit_usage = limit_usage
+
+
+def create_resource_not_found():
+    """Create a ResourceNotFound exception for testing."""
+    mock_response = MagicMock()
+    mock_response.status_code = 404
+    mock_data = MagicMock()
+    mock_data.type = "ResourceNotFound"
+    mock_data.detail = "Not found"
+    return ResourceNotFound(data=mock_data, raw_response=mock_response)
+
+
+def create_http_validation_error():
+    """Create an HTTPValidationError exception for testing."""
+    mock_response = MagicMock()
+    mock_response.status_code = 422
+    mock_data = MagicMock()
+    mock_data.detail = []
+    return HTTPValidationError(data=mock_data, raw_response=mock_response)
+
+
+def create_sdk_error(status_code: int = 500):
+    """Create an SDKError exception for testing."""
+    mock_response = MagicMock()
+    mock_response.status_code = status_code
+    err = SDKError(message="Server error", raw_response=mock_response)
+    err.status_code = status_code
+    return err
 
 
 class TestGetConfigDir:
@@ -205,101 +242,81 @@ class TestNeedsValidation:
 class TestValidateLicenseKeyApi:
     """Tests for validate_license_key_api function."""
 
-    def test_returns_true_for_granted_status(self, httpx_mock):
+    def test_returns_true_for_granted_status(self, polar_mock):
         """Should return True when API returns 'granted' status."""
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            json={"status": "granted"},
-        )
+        polar_mock.validate.return_value = MockValidatedLicenseKey(status="granted")
 
         valid, error = license.validate_license_key_api("test-key")
         assert valid is True
         assert error == ""
 
-    def test_returns_true_for_active_status(self, httpx_mock):
+    def test_returns_true_for_active_status(self, polar_mock):
         """Should return True when API returns 'active' status."""
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            json={"status": "active"},
-        )
+        polar_mock.validate.return_value = MockValidatedLicenseKey(status="active")
 
         valid, error = license.validate_license_key_api("test-key")
         assert valid is True
         assert error == ""
 
-    def test_returns_false_for_revoked_status(self, httpx_mock):
+    def test_returns_false_for_revoked_status(self, polar_mock):
         """Should return False when API returns 'revoked' status."""
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            json={"status": "revoked"},
-        )
+        polar_mock.validate.return_value = MockValidatedLicenseKey(status="revoked")
 
         valid, error = license.validate_license_key_api("test-key")
         assert valid is False
         assert "revoked" in error.lower()
 
-    def test_returns_false_for_404(self, httpx_mock):
+    def test_returns_false_for_404(self, polar_mock):
         """Should return False when license key not found."""
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            status_code=404,
-        )
+        polar_mock.validate.side_effect = create_resource_not_found()
 
         valid, error = license.validate_license_key_api("test-key")
         assert valid is False
         assert "not found" in error.lower()
 
-    def test_returns_false_for_422(self, httpx_mock):
+    def test_returns_false_for_422(self, polar_mock):
         """Should return False for invalid license key format."""
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            status_code=422,
-        )
+        polar_mock.validate.side_effect = create_http_validation_error()
 
         valid, error = license.validate_license_key_api("bad-format")
         assert valid is False
         assert "invalid" in error.lower()
 
-    def test_returns_false_for_other_http_errors(self, httpx_mock):
+    def test_returns_false_for_other_http_errors(self, polar_mock):
         """Should return False for other HTTP errors."""
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            status_code=500,
-        )
+        polar_mock.validate.side_effect = create_sdk_error(500)
 
         valid, error = license.validate_license_key_api("test-key")
         assert valid is False
         assert "500" in error
 
-    def test_handles_timeout(self, httpx_mock):
+    def test_handles_timeout(self, polar_mock):
         """Should handle timeout exceptions."""
-        httpx_mock.add_exception(httpx.TimeoutException("Connection timed out"))
+        polar_mock.validate.side_effect = TimeoutError("Connection timed out")
 
         valid, error = license.validate_license_key_api("test-key")
         assert valid is False
         assert "timeout" in error.lower()
 
-    def test_handles_network_error(self, httpx_mock):
+    def test_handles_network_error(self, polar_mock):
         """Should handle network errors."""
-        httpx_mock.add_exception(httpx.ConnectError("Connection refused"))
+        polar_mock.validate.side_effect = ConnectionError("Connection refused")
 
         valid, error = license.validate_license_key_api("test-key")
         assert valid is False
         assert "network error" in error.lower()
 
-    def test_sends_correct_request_body(self, httpx_mock):
+    def test_sends_correct_request_body(self, polar_mock):
         """Should send correct organization_id and key in request."""
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            json={"status": "granted"},
-        )
+        polar_mock.validate.return_value = MockValidatedLicenseKey(status="granted")
 
         license.validate_license_key_api("my-test-key")
 
-        request = httpx_mock.get_request()
-        body = json.loads(request.content)
-        assert body["key"] == "my-test-key"
-        assert body["organization_id"] == license.ORGANIZATION_ID
+        polar_mock.validate.assert_called_once()
+        call_kwargs = polar_mock.validate.call_args
+        request_data = call_kwargs.kwargs["request"]
+        assert request_data["key"] == "my-test-key"
+        assert request_data["organization_id"] == license.ORGANIZATION_ID
 
 
 class TestPromptForLicenseKey:
@@ -433,11 +450,10 @@ class TestIsDeviceActivated:
 class TestValidateLicenseKeyWithUsage:
     """Tests for validate_license_key_with_usage function."""
 
-    def test_returns_usage_info_on_success(self, httpx_mock):
+    def test_returns_usage_info_on_success(self, polar_mock):
         """Should return usage info when validation succeeds."""
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            json={"status": "granted", "usage": 2, "limit_usage": 5},
+        polar_mock.validate.return_value = MockValidatedLicenseKey(
+            status="granted", usage=2, limit_usage=5
         )
         result = license.validate_license_key_with_usage("test-key")
         assert result.valid is True
@@ -445,33 +461,28 @@ class TestValidateLicenseKeyWithUsage:
         assert result.limit == 5
         assert result.error == ""
 
-    def test_sends_increment_usage_when_requested(self, httpx_mock):
+    def test_sends_increment_usage_when_requested(self, polar_mock):
         """Should send increment_usage in request body when True."""
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            json={"status": "granted", "usage": 1, "limit_usage": 5},
+        polar_mock.validate.return_value = MockValidatedLicenseKey(
+            status="granted", usage=1, limit_usage=5
         )
         license.validate_license_key_with_usage("test-key", increment_usage=True)
-        request = httpx_mock.get_request()
-        body = json.loads(request.content)
-        assert body["increment_usage"] == 1
+        call_kwargs = polar_mock.validate.call_args
+        request_data = call_kwargs.kwargs["request"]
+        assert request_data["increment_usage"] == 1
 
-    def test_does_not_send_increment_usage_when_false(self, httpx_mock):
+    def test_does_not_send_increment_usage_when_false(self, polar_mock):
         """Should not send increment_usage in request when False."""
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            json={"status": "granted"},
-        )
+        polar_mock.validate.return_value = MockValidatedLicenseKey(status="granted")
         license.validate_license_key_with_usage("test-key", increment_usage=False)
-        request = httpx_mock.get_request()
-        body = json.loads(request.content)
-        assert "increment_usage" not in body
+        call_kwargs = polar_mock.validate.call_args
+        request_data = call_kwargs.kwargs["request"]
+        assert "increment_usage" not in request_data
 
-    def test_raises_device_limit_exceeded_when_at_limit(self, httpx_mock):
+    def test_raises_device_limit_exceeded_when_at_limit(self, polar_mock):
         """Should raise DeviceLimitExceeded when usage equals limit."""
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            json={"status": "usage_exceeded", "usage": 5, "limit_usage": 5},
+        polar_mock.validate.return_value = MockValidatedLicenseKey(
+            status="usage_exceeded", usage=5, limit_usage=5
         )
         with pytest.raises(license.DeviceLimitExceeded) as exc_info:
             license.validate_license_key_with_usage("test-key")
@@ -498,20 +509,18 @@ class TestDeviceLimitExceeded:
 class TestGetDeviceUsage:
     """Tests for get_device_usage function."""
 
-    def test_returns_usage_tuple(self, httpx_mock):
+    def test_returns_usage_tuple(self, polar_mock):
         """Should return (usage, limit) tuple."""
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            json={"status": "granted", "usage": 2, "limit_usage": 5},
+        polar_mock.validate.return_value = MockValidatedLicenseKey(
+            status="granted", usage=2, limit_usage=5
         )
         result = license.get_device_usage("test-key")
         assert result == (2, 5)
 
-    def test_returns_none_when_no_limit(self, httpx_mock):
+    def test_returns_none_when_no_limit(self, polar_mock):
         """Should return None when license has no limit."""
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            json={"status": "granted", "usage": 0, "limit_usage": 0},
+        polar_mock.validate.return_value = MockValidatedLicenseKey(
+            status="granted", usage=0, limit_usage=0
         )
         result = license.get_device_usage("test-key")
         assert result is None
@@ -538,11 +547,10 @@ class TestDisplayDeviceUsage:
 class TestActivateDevice:
     """Tests for activate_device function."""
 
-    def test_saves_device_id_on_success(self, temp_config_dir: Path, device_id_file: Path, httpx_mock):
+    def test_saves_device_id_on_success(self, temp_config_dir: Path, device_id_file: Path, polar_mock):
         """Should save device ID when activation succeeds."""
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            json={"status": "granted", "usage": 1, "limit_usage": 5},
+        polar_mock.validate.return_value = MockValidatedLicenseKey(
+            status="granted", usage=1, limit_usage=5
         )
         result = license.activate_device("test-key")
         assert result.valid is True
@@ -550,21 +558,17 @@ class TestActivateDevice:
         data = json.loads(device_id_file.read_text())
         assert data["device_id"] == license.get_hardware_id()
 
-    def test_returns_invalid_result_on_invalid_key(self, temp_config_dir: Path, httpx_mock):
+    def test_returns_invalid_result_on_invalid_key(self, temp_config_dir: Path, polar_mock):
         """Should return invalid result when key is invalid."""
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            status_code=404,
-        )
+        polar_mock.validate.side_effect = create_resource_not_found()
         result = license.activate_device("invalid-key")
         assert result.valid is False
         assert "not found" in result.error.lower()
 
-    def test_raises_device_limit_exceeded(self, temp_config_dir: Path, httpx_mock):
+    def test_raises_device_limit_exceeded(self, temp_config_dir: Path, polar_mock):
         """Should raise DeviceLimitExceeded when limit reached."""
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            json={"status": "usage_exceeded", "usage": 5, "limit_usage": 5},
+        polar_mock.validate.return_value = MockValidatedLicenseKey(
+            status="usage_exceeded", usage=5, limit_usage=5
         )
         with pytest.raises(license.DeviceLimitExceeded):
             license.activate_device("test-key")
@@ -601,12 +605,9 @@ class TestHandleInvalidLicense:
 class TestCheckLicense:
     """Tests for check_license function."""
 
-    def test_validates_and_saves_provided_key(self, temp_config_dir: Path, license_keys_file: Path, httpx_mock):
+    def test_validates_and_saves_provided_key(self, temp_config_dir: Path, license_keys_file: Path, polar_mock):
         """Should validate and save a provided key."""
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            json={"status": "granted"},
-        )
+        polar_mock.validate.return_value = MockValidatedLicenseKey(status="granted")
 
         result = license.check_license(provided_key="new-key")
 
@@ -614,22 +615,16 @@ class TestCheckLicense:
         data = json.loads(license_keys_file.read_text())
         assert "new-key" in data["keys"]
 
-    def test_returns_false_for_invalid_provided_key(self, temp_config_dir: Path, httpx_mock):
+    def test_returns_false_for_invalid_provided_key(self, temp_config_dir: Path, polar_mock):
         """Should return False for invalid provided key."""
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            status_code=404,
-        )
+        polar_mock.validate.side_effect = create_resource_not_found()
 
         with pytest.raises(typer.Abort):
             license.check_license(provided_key="invalid-key")
 
-    def test_prompts_when_no_keys_exist(self, temp_config_dir: Path, httpx_mock):
+    def test_prompts_when_no_keys_exist(self, temp_config_dir: Path, polar_mock):
         """Should prompt for key when no keys exist."""
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            json={"status": "granted"},
-        )
+        polar_mock.validate.return_value = MockValidatedLicenseKey(status="granted")
 
         with patch.object(license, "prompt_for_license_key", return_value="prompted-key"):
             result = license.check_license()
@@ -659,7 +654,7 @@ class TestCheckLicense:
         assert result is True
 
     def test_revalidates_when_cache_expired(
-        self, temp_config_dir: Path, license_keys_file: Path, validation_cache_file: Path, httpx_mock
+        self, temp_config_dir: Path, license_keys_file: Path, validation_cache_file: Path, polar_mock
     ):
         """Should revalidate when cache is expired."""
         license_key = "stored-key"
@@ -672,16 +667,13 @@ class TestCheckLicense:
             "valid": True,
         }))
 
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            json={"status": "granted"},
-        )
+        polar_mock.validate.return_value = MockValidatedLicenseKey(status="granted")
 
         result = license.check_license()
         assert result is True
 
     def test_tries_all_stored_keys(
-        self, temp_config_dir: Path, license_keys_file: Path, validation_cache_file: Path, httpx_mock
+        self, temp_config_dir: Path, license_keys_file: Path, validation_cache_file: Path, polar_mock
     ):
         """Should try all stored keys until one validates."""
         license_keys_file.write_text(json.dumps({"keys": ["bad-key", "good-key"]}))
@@ -690,20 +682,17 @@ class TestCheckLicense:
             "last_validated_at": old_time.isoformat(),
         }))
 
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            json={"status": "revoked"},
-        )
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            json={"status": "granted"},
-        )
+        # First call returns revoked, second call returns granted
+        polar_mock.validate.side_effect = [
+            MockValidatedLicenseKey(status="revoked"),
+            MockValidatedLicenseKey(status="granted"),
+        ]
 
         result = license.check_license()
         assert result is True
 
     def test_handles_all_keys_invalid(
-        self, temp_config_dir: Path, license_keys_file: Path, validation_cache_file: Path, httpx_mock
+        self, temp_config_dir: Path, license_keys_file: Path, validation_cache_file: Path, polar_mock
     ):
         """Should handle case when all stored keys are invalid."""
         license_keys_file.write_text(json.dumps({"keys": ["bad-key-1", "bad-key-2"]}))
@@ -712,25 +701,17 @@ class TestCheckLicense:
             "last_validated_at": old_time.isoformat(),
         }))
 
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            json={"status": "revoked"},
-        )
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            json={"status": "revoked"},
-        )
+        polar_mock.validate.return_value = MockValidatedLicenseKey(status="revoked")
 
         with pytest.raises(typer.Abort):
             license.check_license()
 
     def test_activates_new_device(
-        self, temp_config_dir: Path, license_keys_file: Path, device_id_file: Path, httpx_mock
+        self, temp_config_dir: Path, license_keys_file: Path, device_id_file: Path, polar_mock
     ):
         """Should activate new device and save device ID."""
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            json={"status": "granted", "usage": 1, "limit_usage": 5},
+        polar_mock.validate.return_value = MockValidatedLicenseKey(
+            status="granted", usage=1, limit_usage=5
         )
 
         result = license.check_license(provided_key="new-key")
@@ -741,32 +722,28 @@ class TestCheckLicense:
         assert data["device_id"] == license.get_hardware_id()
 
     def test_does_not_increment_usage_for_activated_device(
-        self, temp_config_dir: Path, license_keys_file: Path, device_id_file: Path, httpx_mock
+        self, temp_config_dir: Path, license_keys_file: Path, device_id_file: Path, polar_mock
     ):
         """Should not increment usage when device is already activated."""
         # Mark device as already activated
         device_id_file.write_text(json.dumps({"device_id": license.get_hardware_id()}))
 
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            json={"status": "granted"},
-        )
+        polar_mock.validate.return_value = MockValidatedLicenseKey(status="granted")
 
         result = license.check_license(provided_key="existing-key")
 
         assert result is True
         # Check that increment_usage was not sent
-        request = httpx_mock.get_request()
-        body = json.loads(request.content)
-        assert "increment_usage" not in body
+        call_kwargs = polar_mock.validate.call_args
+        request_data = call_kwargs.kwargs["request"]
+        assert "increment_usage" not in request_data
 
     def test_handles_device_limit_exceeded(
-        self, temp_config_dir: Path, httpx_mock
+        self, temp_config_dir: Path, polar_mock
     ):
         """Should handle device limit exceeded gracefully."""
-        httpx_mock.add_response(
-            url=license.POLAR_VALIDATE_URL,
-            json={"status": "usage_exceeded", "usage": 5, "limit_usage": 5},
+        polar_mock.validate.return_value = MockValidatedLicenseKey(
+            status="usage_exceeded", usage=5, limit_usage=5
         )
 
         with pytest.raises(typer.Abort):
