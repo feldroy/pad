@@ -638,7 +638,7 @@ class GoToLineModal(ModalScreen[int | None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="goto-container"):
             yield Label(
-                f"Type a line number between 1 and {self.max_line}", id="goto-label"
+                f"Type a line number between\n1 and {self.max_line}", id="goto-label"
             )
             yield Input(placeholder="Line number...", id="goto-input")
 
