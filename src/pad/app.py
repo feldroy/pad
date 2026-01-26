@@ -1208,6 +1208,7 @@ class PadApp(App):
             ".css": "css",
             ".json": "json",
             ".md": "markdown",
+            ".qmd": "markdown",
             ".yaml": "yaml",
             ".yml": "yaml",
             ".toml": "toml",
