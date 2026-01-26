@@ -442,16 +442,19 @@ class ContentSearchModal(ModalScreen[tuple[Path, int] | None]):
         root_path: Path,
         gitignore_filter: GitignoreFilter | None = None,
         show_ignored: bool = False,
+        text_only: bool = True,
     ) -> None:
         super().__init__()
         self.root_path = root_path
         self.gitignore_filter = gitignore_filter
         self.show_ignored = show_ignored
+        self.text_only = text_only
         self.results: list[tuple[Path, int, str]] = []  # (path, line_num, line_text)
         self.selected_index = 0
         self.case_sensitive = False
         # Always exclude these directories
         self.always_excluded = {".git", ".venv", "__pycache__"}
+        self._path_is_text: dict[Path, bool] = {}
 
     def compose(self) -> ComposeResult:
         from textual.widgets import Checkbox
@@ -461,7 +464,7 @@ class ContentSearchModal(ModalScreen[tuple[Path, int] | None]):
             with Horizontal(id="case-sensitive-container"):
                 yield Checkbox("Case sensitive", id="case-sensitive-checkbox", value=False)
             yield Vertical(id="content-results")
-            yield Label("", id="search-status")
+            yield Label("", id="search-status", markup=False)
 
     def on_mount(self) -> None:
         self.query_one("#content-search-input", Input).focus()
@@ -526,6 +529,9 @@ class ContentSearchModal(ModalScreen[tuple[Path, int] | None]):
                     if self.gitignore_filter and self.gitignore_filter.is_ignored(match_path):
                         continue
 
+                if self.text_only and not self._is_probably_text(match_path):
+                    continue
+
                 self.results.append((
                     match_path,
                     match["line_number"],
@@ -552,11 +558,40 @@ class ContentSearchModal(ModalScreen[tuple[Path, int] | None]):
             except ValueError:
                 relative = path
             display_text = f"{relative}:{line_num}: {line_text}"
-            label = Label(display_text, classes="content-result")
+            label = Label(display_text, classes="content-result", markup=False)
             if i == 0:
                 label.add_class("--selected")
             results_container.mount(label)
 
+    def _is_probably_text(self, path: Path) -> bool:
+        """Return True when the file appears to be plain UTF-8 text."""
+        cached = self._path_is_text.get(path)
+        if cached is not None:
+            return cached
+
+        try:
+            with path.open("rb") as handle:
+                sample = handle.read(8192)
+        except OSError:
+            self._path_is_text[path] = False
+            return False
+
+        if not sample:
+            self._path_is_text[path] = True
+            return True
+
+        if b"\x00" in sample:
+            self._path_is_text[path] = False
+            return False
+
+        try:
+            sample.decode("utf-8")
+        except UnicodeDecodeError:
+            self._path_is_text[path] = False
+            return False
+
+        self._path_is_text[path] = True
+        return True
     def on_key(self, event) -> None:
         if event.key == "down" and self.results:
             self._update_selection(1)
@@ -1305,6 +1340,7 @@ class PadApp(App):
                 self.root_path,
                 self.gitignore_filter,
                 self.show_ignored,
+                text_only=True,
             ),
             handle_result,
         )
