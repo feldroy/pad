@@ -1070,6 +1070,7 @@ class PadApp(App):
         Binding("ctrl+s", "save_file", "Save"),
         Binding("ctrl+shift+a", "toggle_autosave", "Toggle Autosave"),
         Binding("ctrl+shift+i", "toggle_show_ignored", "Toggle Ignored"),
+        Binding("ctrl+r", "reload_file", "Reload File"),
         Binding("ctrl+q", "confirm_quit", "Quit"),
         Binding("alt+down", "page_down", "Page Down", show=False),
         Binding("alt+up", "page_up", "Page Up", show=False),
@@ -1158,6 +1159,13 @@ class PadApp(App):
                 self.editor.focus()
 
         self.push_screen(FileChangedModal(self.current_file.name), handle_result)
+
+    async def action_reload_file(self) -> None:
+        """Reload the current file from disk (user action)."""
+        if self.current_file is None:
+            self.notify("No file open", severity="warning")
+            return
+        await self._reload_current_file()
 
     async def _reload_current_file(self) -> None:
         """Reload the current file from disk."""
