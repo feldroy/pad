@@ -8,8 +8,6 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
-    "cryptography>=44.0.0",
-    "polar-sdk>=0.28.1",
     "textual[syntax]>=3.0.0",
     "typer>=0.21.0",
     "vexy-glob>=1.0.9",
