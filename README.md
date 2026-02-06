@@ -43,19 +43,3 @@ Or a directory:
 ```sh
 pad myproject/
 ```
-
-## How licensing works
-
-Your purchase includes 10 device activations. This accounts for spare devices, operating system resets, and even sharing with a few friends so they can try out Pad. If you run out of activations for your individual needs, let us know and we'll figure something out.
-
-Students with a .edu email domain can get Pad for free. Just reach out to us.
-
-If you want to purchase Pad for a team, contact us, and we'll set you up with a custom plan.
-
-## Money Back Guarantee
-
-There's an inestimably small chance you won't love Pad the way we do. So we're offering a 30 day money back guarantee. Send us an email and we'll send your money back.
-
-## Buy Pad!
-
-What are you waiting for? [Buy Pad today!](https://buy.polar.sh/polar_cl_zPEN10mmA7131ibshWggYglOBYZnnkGzBnQEy4I2EjS)
