@@ -800,16 +800,17 @@ class FileChangedModal(ModalScreen[bool]):
     }
     """
 
-    def __init__(self, filename: str) -> None:
+    def __init__(self, filename: str, message: str | None = None) -> None:
         super().__init__()
         self.filename = filename
+        self.message = message or f"'{filename}' has been modified on disk.\nDo you want to reload it?"
 
     def compose(self) -> ComposeResult:
         from textual.widgets import Button
 
         with Vertical(id="file-changed-container"):
             yield Label(
-                f"'{self.filename}' has been modified on disk.\nDo you want to reload it?",
+                self.message,
                 id="file-changed-label",
             )
             with Horizontal(id="file-changed-buttons"):
@@ -1164,6 +1165,21 @@ class PadApp(App):
         """Reload the current file from disk (user action)."""
         if self.current_file is None:
             self.notify("No file open", severity="warning")
+            return
+        if self.file_modified:
+            async def handle_result(reload: bool) -> None:
+                if reload:
+                    await self._reload_current_file()
+                if self.editor:
+                    self.editor.focus()
+
+            self.push_screen(
+                FileChangedModal(
+                    self.current_file.name,
+                    message=f"'{self.current_file.name}' has unsaved changes.\nReload from disk?",
+                ),
+                handle_result,
+            )
             return
         await self._reload_current_file()
 
