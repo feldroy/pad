@@ -800,16 +800,17 @@ class FileChangedModal(ModalScreen[bool]):
     }
     """
 
-    def __init__(self, filename: str) -> None:
+    def __init__(self, filename: str, message: str | None = None) -> None:
         super().__init__()
         self.filename = filename
+        self.message = message or f"'{filename}' has been modified on disk.\nDo you want to reload it?"
 
     def compose(self) -> ComposeResult:
         from textual.widgets import Button
 
         with Vertical(id="file-changed-container"):
             yield Label(
-                f"'{self.filename}' has been modified on disk.\nDo you want to reload it?",
+                self.message,
                 id="file-changed-label",
             )
             with Horizontal(id="file-changed-buttons"):
@@ -1074,6 +1075,8 @@ class PadApp(App):
         Binding("super+g", "goto_line", "Go to Line", show=False),
         Binding("ctrl+s", "save_file", "Save"),
         Binding("super+s", "save_file", "Save", show=False),
+        Binding("ctrl+r", "reload_file", "Reload File"),
+        Binding("super+r", "reload_file", "Reload File"),      
         Binding("ctrl+shift+a", "toggle_autosave", "Toggle Autosave"),
         Binding("super+shift+a", "toggle_autosave", "Toggle Autosave", show=False),
         Binding("ctrl+shift+i", "toggle_show_ignored", "Toggle Ignored"),
@@ -1167,6 +1170,28 @@ class PadApp(App):
                 self.editor.focus()
 
         self.push_screen(FileChangedModal(self.current_file.name), handle_result)
+
+    async def action_reload_file(self) -> None:
+        """Reload the current file from disk (user action)."""
+        if self.current_file is None:
+            self.notify("No file open", severity="warning")
+            return
+        if self.file_modified:
+            async def handle_result(reload: bool) -> None:
+                if reload:
+                    await self._reload_current_file()
+                if self.editor:
+                    self.editor.focus()
+
+            self.push_screen(
+                FileChangedModal(
+                    self.current_file.name,
+                    message=f"'{self.current_file.name}' has unsaved changes.\nReload from disk?",
+                ),
+                handle_result,
+            )
+            return
+        await self._reload_current_file()
 
     async def _reload_current_file(self) -> None:
         """Reload the current file from disk."""
