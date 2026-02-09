@@ -1,0 +1,31 @@
+name: Issue
+description: Report a bug or suggest an improvement
+body:
+  - type: textarea
+    id: what-happens-now
+    attributes:
+      label: What happens now
+      description: Describe the current behavior. What do you see or experience?
+    validations:
+      required: true
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to reproduce
+      description: How can someone else see this for themselves?
+    validations:
+      required: false
+  - type: textarea
+    id: suggested-fix
+    attributes:
+      label: Suggested fix
+      description: If you have an idea for how to address this, describe it here. Pointing at specific code is helpful.
+    validations:
+      required: false
+  - type: textarea
+    id: not-in-scope
+    attributes:
+      label: What is not in scope
+      description: Anything that might seem related but should be handled separately?
+    validations:
+      required: false

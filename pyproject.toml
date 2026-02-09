@@ -1,6 +1,6 @@
 [project]
 name = "pad-app"
-version = "0.3.5"
+version = "0.4.0"
 description = "A terminal code editor for those of us who aren't into vim."
 readme = "README.md"
 authors = [
@@ -8,8 +8,6 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
-    "cryptography>=44.0.0",
-    "polar-sdk>=0.28.1",
     "textual[syntax]>=3.0.0",
     "typer>=0.21.0",
     "vexy-glob>=1.0.9",
