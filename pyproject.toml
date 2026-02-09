@@ -1,6 +1,6 @@
 [project]
 name = "pad-app"
-version = "0.4.0"
+version = "0.5.0"
 description = "A terminal code editor for those of us who aren't into vim."
 readme = "README.md"
 authors = [
@@ -12,6 +12,8 @@ dependencies = [
     "typer>=0.21.0",
     "vexy-glob>=1.0.9",
 ]
+urls.Homepage = "https://github.com/feldroy/pad-app"
+urls.Issues = "https://github.com/feldroy/pad-app/issues"
 
 [project.scripts]
 pad = "pad:app"
