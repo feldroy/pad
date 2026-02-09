@@ -41,18 +41,11 @@ tag:
 
 build:
     rm -rf dist
-    rm -rf src/pad/pyarmor_runtime_* 2>/dev/null || true
-    pyarmor gen --enable-rft -O dist -i src/pad
-
-# Obfuscate and publish to PyPI
-publish:
-    rm -rf dist .pyarmor_build
-    rm -rf src/pad/pyarmor_runtime_* 2>/dev/null || true
-    pyarmor gen -O .pyarmor_build -i src/pad
-    cp -r .pyarmor_build/pad/* src/pad/
     uv build
+
+# Publish to PyPI
+publish:
+    just build
     uv publish
-    git restore src/pad
-    rm -rf .pyarmor_build
-    rm -rf src/pad/pyarmor_runtime_* 2>/dev/null || true
+
 
