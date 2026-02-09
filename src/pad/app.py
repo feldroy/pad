@@ -1063,16 +1063,25 @@ class PadApp(App):
 
     BINDINGS = [
         Binding("ctrl+b", "toggle_browser", "Browse Files"),
+        Binding("super+b", "toggle_browser", "Browse Files", show=False),
         Binding("ctrl+o", "search_files", "Search Files"),
+        Binding("super+o", "search_files", "Search Files", show=False),
         Binding("ctrl+f", "search_text", "Find"),
+        Binding("super+f", "search_text", "Find", show=False),
         Binding("ctrl+shift+f", "search_content", "Search Content"),
+        Binding("super+shift+f", "search_content", "Search Content", show=False),
         Binding("ctrl+g", "goto_line", "Go to Line"),
+        Binding("super+g", "goto_line", "Go to Line", show=False),
         Binding("ctrl+s", "save_file", "Save"),
+        Binding("super+s", "save_file", "Save", show=False),
         Binding("ctrl+shift+a", "toggle_autosave", "Toggle Autosave"),
+        Binding("super+shift+a", "toggle_autosave", "Toggle Autosave", show=False),
         Binding("ctrl+shift+i", "toggle_show_ignored", "Toggle Ignored"),
+        Binding("super+shift+i", "toggle_show_ignored", "Toggle Ignored", show=False),
         Binding("ctrl+q", "confirm_quit", "Quit"),
         Binding("alt+down", "page_down", "Page Down", show=False),
         Binding("alt+up", "page_up", "Page Up", show=False),
+
     ]
 
     def __init__(self, path: Path) -> None:
