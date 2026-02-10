@@ -1,6 +1,7 @@
 [project]
 name = "pad-app"
 version = "0.5.2"
+
 description = "A terminal code editor for those of us who aren't into vim."
 readme = "README.md"
 authors = [
