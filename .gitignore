@@ -6,6 +6,8 @@ build/
 dist/
 wheels/
 *.egg-info
+AGENTS.md
+CLAUDE.md
 
 # Virtual environments
 .venv
