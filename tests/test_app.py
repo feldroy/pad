@@ -44,13 +44,15 @@ def test_content_search_handles_markup_in_results(monkeypatch, tmp_path: Path) -
             super().__init__(renderable, *args, **kwargs)
 
     def fake_find(*_args, **_kwargs):
-        return iter([
-            {
-                "path": str(file_path),
-                "line_number": 3,
-                "line_text": "[broken markup",
-            }
-        ])
+        return iter(
+            [
+                {
+                    "path": str(file_path),
+                    "line_number": 3,
+                    "line_text": "[broken markup",
+                }
+            ]
+        )
 
     monkeypatch.setattr(pad_app, "Label", RaisingLabel)
     monkeypatch.setattr(pad_app.vexy_glob, "find", fake_find)
@@ -78,18 +80,20 @@ def test_content_search_skips_binary_files(monkeypatch, tmp_path: Path) -> None:
     modal = ContentSearchModal(tmp_path)
 
     def fake_find(*_args, **_kwargs):
-        return iter([
-            {
-                "path": str(binary_file),
-                "line_number": 1,
-                "line_text": "\x00\xff\x00",
-            },
-            {
-                "path": str(text_file),
-                "line_number": 1,
-                "line_text": "hello world",
-            },
-        ])
+        return iter(
+            [
+                {
+                    "path": str(binary_file),
+                    "line_number": 1,
+                    "line_text": "\x00\xff\x00",
+                },
+                {
+                    "path": str(text_file),
+                    "line_number": 1,
+                    "line_text": "hello world",
+                },
+            ]
+        )
 
     import importlib
 

@@ -64,7 +64,10 @@ class GitignoreFilter:
         paths_to_check = [relative] + list(relative.parents)[:-1]  # Exclude '.'
 
         for check_path in paths_to_check:
-            if self._path_matches_patterns(check_path, path if check_path == relative else self.root_path / check_path):
+            if self._path_matches_patterns(
+                check_path,
+                path if check_path == relative else self.root_path / check_path,
+            ):
                 return True
 
         return False
@@ -227,10 +230,7 @@ class FileSearchModal(ModalScreen[Path | None]):
                     if any(part in always_excluded for part in path.parts):
                         continue
                     # Also skip gitignored files
-                    if (
-                        self.gitignore_filter
-                        and self.gitignore_filter.is_ignored(path)
-                    ):
+                    if self.gitignore_filter and self.gitignore_filter.is_ignored(path):
                         continue
                 if path.is_file() and query in path.name.lower():
                     self.results.append(path)
@@ -460,9 +460,13 @@ class ContentSearchModal(ModalScreen[tuple[Path, int] | None]):
         from textual.widgets import Checkbox
 
         with Vertical(id="content-search-container"):
-            yield Input(placeholder="Search content across files...", id="content-search-input")
+            yield Input(
+                placeholder="Search content across files...", id="content-search-input"
+            )
             with Horizontal(id="case-sensitive-container"):
-                yield Checkbox("Case sensitive", id="case-sensitive-checkbox", value=False)
+                yield Checkbox(
+                    "Case sensitive", id="case-sensitive-checkbox", value=False
+                )
             yield Vertical(id="content-results")
             yield Label("", id="search-status", markup=False)
 
@@ -526,17 +530,21 @@ class ContentSearchModal(ModalScreen[tuple[Path, int] | None]):
                     if any(part in self.always_excluded for part in match_path.parts):
                         continue
                     # Check gitignore patterns
-                    if self.gitignore_filter and self.gitignore_filter.is_ignored(match_path):
+                    if self.gitignore_filter and self.gitignore_filter.is_ignored(
+                        match_path
+                    ):
                         continue
 
                 if self.text_only and not self._is_probably_text(match_path):
                     continue
 
-                self.results.append((
-                    match_path,
-                    match["line_number"],
-                    match["line_text"].strip()[:80]  # Truncate long lines
-                ))
+                self.results.append(
+                    (
+                        match_path,
+                        match["line_number"],
+                        match["line_text"].strip()[:80],  # Truncate long lines
+                    )
+                )
 
         except Exception as e:
             status_label.update(f"Search error: {e}")
@@ -548,7 +556,7 @@ class ContentSearchModal(ModalScreen[tuple[Path, int] | None]):
             return
 
         if len(self.results) >= 100:
-            status_label.update(f"Showing first 100 matches (more available)")
+            status_label.update("Showing first 100 matches (more available)")
         else:
             status_label.update(f"Found {len(self.results)} matches")
 
@@ -592,6 +600,7 @@ class ContentSearchModal(ModalScreen[tuple[Path, int] | None]):
 
         self._path_is_text[path] = True
         return True
+
     def on_key(self, event) -> None:
         if event.key == "down" and self.results:
             self._update_selection(1)
@@ -803,7 +812,10 @@ class FileChangedModal(ModalScreen[bool]):
     def __init__(self, filename: str, message: str | None = None) -> None:
         super().__init__()
         self.filename = filename
-        self.message = message or f"'{filename}' has been modified on disk.\nDo you want to reload it?"
+        self.message = (
+            message
+            or f"'{filename}' has been modified on disk.\nDo you want to reload it?"
+        )
 
     def compose(self) -> ComposeResult:
         from textual.widgets import Button
@@ -1076,7 +1088,7 @@ class PadApp(App):
         Binding("ctrl+s", "save_file", "Save"),
         Binding("super+s", "save_file", "Save", show=False),
         Binding("ctrl+r", "reload_file", "Reload File"),
-        Binding("super+r", "reload_file", "Reload File"),      
+        Binding("super+r", "reload_file", "Reload File"),
         Binding("ctrl+shift+a", "toggle_autosave", "Toggle Autosave"),
         Binding("super+shift+a", "toggle_autosave", "Toggle Autosave", show=False),
         Binding("ctrl+shift+i", "toggle_show_ignored", "Toggle Ignored"),
@@ -1084,7 +1096,6 @@ class PadApp(App):
         Binding("ctrl+q", "confirm_quit", "Quit"),
         Binding("alt+down", "page_down", "Page Down", show=False),
         Binding("alt+up", "page_up", "Page Up", show=False),
-
     ]
 
     def __init__(self, path: Path) -> None:
@@ -1177,6 +1188,7 @@ class PadApp(App):
             self.notify("No file open", severity="warning")
             return
         if self.file_modified:
+
             async def handle_result(reload: bool) -> None:
                 if reload:
                     await self._reload_current_file()

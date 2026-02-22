@@ -13,9 +13,51 @@ dependencies = [
     "typer>=0.21.0",
     "vexy-glob>=1.0.9",
 ]
+keywords = [
+    "backend",
+    "python",
+    "terminal",    
+    "textual",
+    "tui",    
+]
+
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: OS Independent",
+    "Operating System :: Unix",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Internet",
+    "Topic :: Software Development",
+    "Topic :: Text Editors",    
+    "Topic :: Text Processing",
+    "Topic :: Utilities",
+    "Typing :: Typed",
+]
+urls.Homepage = "https://github.com/feldroy/pad"
+urls.Issues = "https://github.com/feldroy/pad/issues"
+urls.Repository = "https://github.com/feldroy/pad"
+urls.Sponsor = "https://github.com/sponsors/feldroy"
 
 [project.scripts]
 pad = "pad:app"
+
+[dependency-groups]
+dev = [
+    "ipdb>=0.13.13",
+    "pytest>=8.0.0",
+    "ruff>=0.14.10",
+    "rust-just>=1.46.0",
+]
 
 [build-system]
 requires = ["uv_build>=0.9.11,<0.10.0"]
@@ -24,8 +66,3 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-name = "pad"
 
-[dependency-groups]
-dev = [
-    "pytest>=8.0.0",
-    "ruff>=0.14.10",
-]
