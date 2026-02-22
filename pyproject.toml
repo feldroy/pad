@@ -1,8 +1,8 @@
 [project]
 name = "pad"
-version = "0.6.0"
+version = "0.6.1"
 
-description = "A terminal code editor for those of us who aren't into vim."
+description = "Pad is an easy to use terminal code editor for those of us who aren't into vim."
 readme = "README.md"
 authors = [
     { name = "Daniel Roy Greenfeld", email = "daniel@feldroy.com" }
