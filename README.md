@@ -27,7 +27,7 @@ Pad is an easy to use terminal code editor for those of us who aren't into vim.
 ## Install
 
 ```sh
-uv tool install pad-app
+uv tool install pad
 ```
 
 Currently Pad is untested with any other installation method. If it works for your installation method, let me know and I'll add it to this section.
@@ -45,3 +45,7 @@ Or a directory:
 ```sh
 pad myproject/
 ```
+
+## Special thanks
+
+Many thanks to [Stan Ovchinnikov](https://github.com/ndtfy) for graciously sharing the "pad" name on PyPI, which was to be a tkinter-based editor. He was kind enough to let me use the name for this project, which is a terminal-based code editor built on textual. If you're interested in how this project might have been built using tkinter, you can check it out [here](https://github.com/ndtfy/pad).

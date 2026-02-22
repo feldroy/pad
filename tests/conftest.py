@@ -1,1 +1,1 @@
-"""Pytest configuration and fixtures for pad-app tests."""
+"""Pytest configuration and fixtures for pad tests."""
