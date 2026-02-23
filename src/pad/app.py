@@ -287,7 +287,8 @@ class TextSearchModal(ModalScreen[None]):
 
     CSS = """
     TextSearchModal {
-        align: center middle;
+        align: center bottom;
+        background: transparent;
     }
 
     #text-search-container {
@@ -297,6 +298,7 @@ class TextSearchModal(ModalScreen[None]):
         background: $surface;
         border: tall $primary;
         padding: 1 2;
+        margin-bottom: 1;  /* prevents gutter overlap */
     }
 
     #text-search-input {
@@ -654,7 +656,8 @@ class GoToLineModal(ModalScreen[int | None]):
 
     CSS = """
     GoToLineModal {
-        align: center middle;
+        align: center bottom;
+        background: transparent;
     }
 
     #goto-container {
@@ -664,6 +667,7 @@ class GoToLineModal(ModalScreen[int | None]):
         background: $surface;
         border: tall $primary;
         padding: 1 2;
+        margin-bottom: 1;  /* prevents gutter overlap */
     }
 
     #goto-label {
