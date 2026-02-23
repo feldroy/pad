@@ -6,16 +6,17 @@ import asyncio
 from pathlib import Path
 
 from textual.app import App
+from textual.screen import ModalScreen
 
 from rich.markup import MarkupError
 
-from pad.app import ContentSearchModal
+from pad.app import ContentSearchModal, GoToLineModal, TextSearchModal
 
 
 class _TestApp(App):
     """Minimal app to host a modal for testing."""
 
-    def __init__(self, modal: ContentSearchModal) -> None:
+    def __init__(self, modal: ModalScreen[object]) -> None:
         super().__init__()
         self._modal = modal
 
@@ -109,5 +110,41 @@ def test_content_search_skips_binary_files(monkeypatch, tmp_path: Path) -> None:
 
             assert len(modal.results) == 1
             assert modal.results[0][0] == text_file
+
+    asyncio.run(run_test())
+
+
+def test_text_search_modal_renders_at_bottom() -> None:
+    """Text search modal should be docked to the bottom of the screen."""
+    modal = TextSearchModal("sample text", lambda _position: None)
+
+    async def run_test() -> None:
+        app = _TestApp(modal)
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+
+            container = modal.query_one("#text-search-container")
+            screen_bottom = app.screen.region.bottom
+
+            assert modal.styles.align == ("center", "bottom")
+            assert screen_bottom - container.region.bottom == 1
+
+    asyncio.run(run_test())
+
+
+def test_goto_line_modal_renders_at_bottom() -> None:
+    """Go-to-line modal should be docked to the bottom of the screen."""
+    modal = GoToLineModal(200)
+
+    async def run_test() -> None:
+        app = _TestApp(modal)
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+
+            container = modal.query_one("#goto-container")
+            screen_bottom = app.screen.region.bottom
+
+            assert modal.styles.align == ("center", "bottom")
+            assert screen_bottom - container.region.bottom == 1
 
     asyncio.run(run_test())
