@@ -20,7 +20,6 @@ Pad is an easy to use terminal code editor for those of us who aren't into vim.
     - `ctrl+g:` go to line
     - `ctrl+b:` file browser
     - `ctrl+o:` file search
-    - `ctrl+w:` save current file and exit
     - `ctrl+q:` quit
     - `ctrl+shift+f`: Fast file content search
 - Works with some Apple key combinations, depending on your terminal's handling of them. For example, in ghostty, `cmd+s` works as expected to save the current file but `cmd+c` doesn't copy

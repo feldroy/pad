@@ -1168,7 +1168,6 @@ class PadApp(App):
         Binding("ctrl+shift+i", "toggle_show_ignored", "Toggle Ignored"),
         Binding("super+shift+i", "toggle_show_ignored", "Toggle Ignored", show=False),
         Binding("ctrl+q", "save_and_exit", "Quit"),
-        Binding("ctrl+w", "save_and_exit", "Save & Exit"),
         Binding("alt+down", "page_down", "Page Down", show=False),
         Binding("alt+up", "page_up", "Page Up", show=False),
     ]
