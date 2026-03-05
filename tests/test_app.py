@@ -4,13 +4,20 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 
 from textual.app import App
 from textual.screen import ModalScreen
 
 from rich.markup import MarkupError
 
-from pad.app import ContentSearchModal, GoToLineModal, TextSearchModal
+from pad.app import (
+    ContentSearchModal,
+    GoToLineModal,
+    PadApp,
+    SaveExitConfirmModal,
+    TextSearchModal,
+)
 
 
 class _TestApp(App):
@@ -148,3 +155,107 @@ def test_goto_line_modal_renders_at_bottom() -> None:
             assert screen_bottom - container.region.bottom == 1
 
     asyncio.run(run_test())
+
+
+def test_save_and_exit_prompts_when_modified_and_saves_on_confirm(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """Ctrl+W should prompt, then save and exit after confirmation."""
+    file_path = tmp_path / "example.txt"
+    file_path.write_text("before")
+
+    app = PadApp(tmp_path)
+    app.current_file = file_path
+    app.editor = SimpleNamespace(text="after", focus=lambda: None)
+    app.file_modified = True
+
+    exited = False
+    prompted = False
+
+    def fake_exit() -> None:
+        nonlocal exited
+        exited = True
+
+    def fake_push_screen(modal, callback) -> None:
+        nonlocal prompted
+        prompted = True
+        assert isinstance(modal, SaveExitConfirmModal)
+        callback(True)
+
+    monkeypatch.setattr(app, "exit", fake_exit)
+    monkeypatch.setattr(app, "notify", lambda *args, **kwargs: None)
+    monkeypatch.setattr(app, "push_screen", fake_push_screen)
+
+    app.action_save_and_exit()
+
+    assert prompted
+    assert file_path.read_text() == "after"
+    assert exited
+
+
+def test_save_and_exit_does_not_save_or_exit_when_prompt_cancelled(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """Ctrl+W should not save or exit when user cancels the prompt."""
+    file_path = tmp_path / "example.txt"
+    file_path.write_text("before")
+
+    app = PadApp(tmp_path)
+    app.current_file = file_path
+
+    focused = False
+
+    def fake_focus() -> None:
+        nonlocal focused
+        focused = True
+
+    app.editor = SimpleNamespace(text="after", focus=fake_focus)
+    app.file_modified = True
+
+    exited = False
+
+    def fake_exit() -> None:
+        nonlocal exited
+        exited = True
+
+    def fake_push_screen(_modal, callback) -> None:
+        callback(False)
+
+    monkeypatch.setattr(app, "exit", fake_exit)
+    monkeypatch.setattr(app, "notify", lambda *args, **kwargs: None)
+    monkeypatch.setattr(app, "push_screen", fake_push_screen)
+
+    app.action_save_and_exit()
+
+    assert file_path.read_text() == "before"
+    assert focused
+    assert not exited
+
+
+def test_save_and_exit_does_not_exit_on_save_error_after_confirm(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """Ctrl+W should not exit if save fails after confirmation."""
+    file_path = tmp_path / "missing" / "example.txt"
+
+    app = PadApp(tmp_path)
+    app.current_file = file_path
+    app.editor = SimpleNamespace(text="after", focus=lambda: None)
+    app.file_modified = True
+
+    exited = False
+
+    def fake_exit() -> None:
+        nonlocal exited
+        exited = True
+
+    def fake_push_screen(_modal, callback) -> None:
+        callback(True)
+
+    monkeypatch.setattr(app, "exit", fake_exit)
+    monkeypatch.setattr(app, "notify", lambda *args, **kwargs: None)
+    monkeypatch.setattr(app, "push_screen", fake_push_screen)
+
+    app.action_save_and_exit()
+
+    assert not exited
