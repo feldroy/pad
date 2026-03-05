@@ -777,6 +777,76 @@ class QuitConfirmModal(ModalScreen[bool]):
         self.dismiss(True)
 
 
+class SaveExitConfirmModal(ModalScreen[bool]):
+    """Modal for confirming save-and-exit for unsaved files."""
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+    ]
+
+    CSS = """
+    SaveExitConfirmModal {
+        align: center middle;
+    }
+
+    #save-exit-container {
+        width: 50%;
+        max-width: 60;
+        height: auto;
+        background: $surface;
+        border: tall $warning;
+        padding: 1 2;
+    }
+
+    #save-exit-label {
+        text-align: center;
+        margin-bottom: 1;
+    }
+
+    #save-exit-buttons {
+        align: center middle;
+        height: auto;
+    }
+
+    .save-exit-button {
+        margin: 0 1;
+    }
+    """
+
+    def __init__(self, filename: str) -> None:
+        super().__init__()
+        self.filename = filename
+
+    def compose(self) -> ComposeResult:
+        from textual.widgets import Button
+
+        with Vertical(id="save-exit-container"):
+            yield Label(
+                f"'{self.filename}' has unsaved changes.\nSave and exit?",
+                id="save-exit-label",
+            )
+            with Horizontal(id="save-exit-buttons"):
+                yield Button(
+                    "Save & Exit",
+                    id="save-exit-yes",
+                    classes="save-exit-button",
+                    variant="warning",
+                )
+                yield Button("Cancel", id="save-exit-no", classes="save-exit-button")
+
+    def on_mount(self) -> None:
+        self.query_one("#save-exit-no").focus()
+
+    def on_button_pressed(self, event) -> None:
+        if event.button.id == "save-exit-yes":
+            self.dismiss(True)
+        else:
+            self.dismiss(False)
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
+
+
 class FileChangedModal(ModalScreen[bool]):
     """Modal for prompting user when file has changed on disk."""
 
@@ -1097,7 +1167,8 @@ class PadApp(App):
         Binding("super+shift+a", "toggle_autosave", "Toggle Autosave", show=False),
         Binding("ctrl+shift+i", "toggle_show_ignored", "Toggle Ignored"),
         Binding("super+shift+i", "toggle_show_ignored", "Toggle Ignored", show=False),
-        Binding("ctrl+q", "confirm_quit", "Quit"),
+        Binding("ctrl+q", "save_and_exit", "Quit"),
+        Binding("ctrl+w", "save_and_exit", "Save & Exit"),
         Binding("alt+down", "page_down", "Page Down", show=False),
         Binding("alt+up", "page_up", "Page Up", show=False),
     ]
@@ -1139,16 +1210,27 @@ class PadApp(App):
         # Start periodic file change detection (check every 2 seconds)
         self.set_interval(2.0, self._check_file_changed)
 
-    def _save_current_file(self) -> None:
-        """Save the current file if modified."""
-        if self.current_file and self.editor and self.file_modified:
-            try:
-                self.current_file.write_text(self.editor.text)
-                self.file_modified = False
-                # Update mtime after saving
-                self.file_mtime = self.current_file.stat().st_mtime
-            except Exception as e:
-                self.notify(f"Error saving file: {e}", severity="error")
+    def _save_current_file(
+        self, *, only_if_modified: bool = True, notify_success: bool = False
+    ) -> bool:
+        """Save the current file and return whether the save succeeded."""
+        if self.current_file is None or self.editor is None:
+            return False
+
+        if only_if_modified and not self.file_modified:
+            return True
+
+        try:
+            self.current_file.write_text(self.editor.text)
+            self.file_modified = False
+            # Update mtime after saving
+            self.file_mtime = self.current_file.stat().st_mtime
+            if notify_success:
+                self.notify(f"Saved {self.current_file.name}")
+            return True
+        except Exception as e:
+            self.notify(f"Error saving file: {e}", severity="error")
+            return False
 
     def _check_file_changed(self) -> None:
         """Check if the current file has been modified on disk."""
@@ -1428,14 +1510,7 @@ class PadApp(App):
         if self.editor is None:
             return
 
-        try:
-            content = self.editor.text
-            self.current_file.write_text(content)
-            self.file_modified = False
-            self.file_mtime = self.current_file.stat().st_mtime  # Update mtime
-            self.notify(f"Saved {self.current_file.name}")
-        except Exception as e:
-            self.notify(f"Error saving file: {e}", severity="error")
+        self._save_current_file(only_if_modified=False, notify_success=True)
 
     def action_toggle_autosave(self) -> None:
         """Toggle autosave on/off."""
@@ -1459,6 +1534,25 @@ class PadApp(App):
                 self.editor.focus()
 
         self.push_screen(QuitConfirmModal(), handle_result)
+
+    def action_save_and_exit(self) -> None:
+        """Prompt to save when needed, then exit."""
+        if self.current_file is None or self.editor is None:
+            self.exit()
+            return
+
+        if not self.file_modified:
+            self.exit()
+            return
+
+        def handle_result(confirmed: bool) -> None:
+            if confirmed:
+                if self._save_current_file(only_if_modified=False, notify_success=True):
+                    self.exit()
+            elif self.editor:
+                self.editor.focus()
+
+        self.push_screen(SaveExitConfirmModal(self.current_file.name), handle_result)
 
     def action_page_down(self) -> None:
         """Move cursor down by one page."""
@@ -1505,3 +1599,7 @@ def run(path: Path) -> None:
     """Run the Pad application."""
     app = PadApp(path)
     app.run()
+
+
+if __name__ == "__main__":
+    run(Path("."))
